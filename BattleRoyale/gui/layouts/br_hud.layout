@@ -1,0 +1,48 @@
+FrameWidgetClass BR_Hud {
+ position 0 0
+ size 1 1
+ halign center_ref
+ valign top_ref
+ hexactpos 0
+ vexactpos 0
+ hexactsize 0
+ vexactsize 0
+ ignorepointer 1
+ priority 900
+ {
+  TextWidgetClass Title {
+   ignorepointer 1
+   position 0 20
+   size 1 32
+   halign center_ref
+   valign top_ref
+   hexactpos 0
+   vexactpos 1
+   hexactsize 0
+   vexactsize 1
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 28
+   "text halign" center
+   "text valign" center
+  }
+  TextWidgetClass Subtitle {
+   ignorepointer 1
+   position 0 54
+   size 1 24
+   halign center_ref
+   valign top_ref
+   hexactpos 0
+   vexactpos 1
+   hexactsize 0
+   vexactsize 1
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 20
+   "text halign" center
+   "text valign" center
+  }
+ }
+}
