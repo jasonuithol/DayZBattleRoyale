@@ -57,6 +57,8 @@ modded class MissionGameplay
 	protected float m_BR_BeatAt;
 	protected void BR_Heartbeat()
 	{
+		if (!BR_Debug.LOG)
+			return;
 		float now = GetGame().GetTickTime();
 		if (now - m_BR_BeatAt < 2)
 			return;

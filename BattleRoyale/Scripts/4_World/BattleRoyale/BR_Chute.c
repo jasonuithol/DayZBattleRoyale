@@ -169,7 +169,7 @@ class BR_ChuteCommand: HumanCommandScript
 		if (m_Blocked > 1.0)
 			Land("blocked", agl);
 
-		if (m_Age - m_LogAt >= 2)
+		if (BR_Debug.LOG && m_Age - m_LogAt >= 2)
 		{
 			m_LogAt = m_Age;
 			Print("[BattleRoyale] chute (" + m_Player.GetInstanceType() + ") t " + m_Age + " agl " + agl + " y " + pos[1] + " target " + m_TargetY + " open " + m_Open + " input " + m_Speed + " " + m_Dir + " pre " + m_Pre + " post " + m_Post);
@@ -320,7 +320,7 @@ modded class PlayerBase
 		BR_ChuteCommand chute = BR_ChuteCommand.Cast(GetCommand_Script());
 		// once a second while jumping: what this game is running for the jumper
 		float now = GetGame().GetTickTime();
-		if (now - m_BR_LoggedAt >= 1)
+		if (BR_Debug.LOG && now - m_BR_LoggedAt >= 1)
 		{
 			m_BR_LoggedAt = now;
 			Print("[BattleRoyale] jumping (" + GetInstanceType() + "): command " + pCurrentCommandID + ", ours " + (chute != null) + ", finished " + pCurrentCommandFinished + ", " + BR_ChuteCommand.HeightAboveGround(GetPosition()) + " m up");

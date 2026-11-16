@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1 (unreleased)
+## 0.1 - 2026-11-16
 
 First playable demo on Nasdara: solo rounds, with the simplest version of every feature.
 

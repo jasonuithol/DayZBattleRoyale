@@ -1,7 +1,7 @@
 {
     "minPlayers": 1,
-    "firstLobbySeconds": 30,
-    "lobbySeconds": 15,
+    "firstLobbySeconds": 300,
+    "lobbySeconds": 60,
     "winnerSeconds": 15,
     "lobbyX": 1000,
     "lobbyZ": 1000,

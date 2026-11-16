@@ -1,6 +1,13 @@
 // Shared by server and client: the round phases, the state the server sends every second,
 // and the jump request going the other way.
 
+// The periodic diagnostic logging (the parachute every 2 s, the jump every second, the
+// client's heartbeat): on only while chasing a problem. One-line event logs stay on.
+class BR_Debug
+{
+	static const bool LOG = false;
+}
+
 enum BR_Phase
 {
 	LOBBY,   // waiting for the next round

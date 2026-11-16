@@ -10,8 +10,7 @@ what comes later.
    off the edge of the map, near (220, 1780). There nobody can be hurt, and anyone who walks
    more than 30 m off is brought back. A clock at the top of the screen counts down to the
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
-   people can log in, then 1 minute between rounds (`lobbySeconds`). For testing,
-   `mission/battleroyale.json` currently has 30 s and 15 s. New characters are created here,
+   people can log in, then 1 minute between rounds (`lobbySeconds`). New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
@@ -192,5 +191,5 @@ view from the plane, steering, the canopy, the lines on the map, teleporting and
 - **Test bots stand still:** they're only there to win or lose against.
 - **The storm wall is local to each player:** only the stretch near you is there, and other
   players see their own.
-- **Diagnostic logging is still on:** the parachute logs every 2 s on every side, and the
-  client logs a heartbeat every 2 s during a round.
+- **Diagnostic logging:** the parachute's log every 2 s, the jump's every second and the
+  client's heartbeat are off. `BR_Debug.LOG` in `BR_Common.c` turns them back on.
