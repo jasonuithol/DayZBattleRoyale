@@ -1,5 +1,5 @@
-// The plane at the start of a round: a straight route across the first circle, through a
-// point near its middle, at a fixed height clear of the hills under it. Where the plane is
+// The plane at the start of a round: a straight route across the whole map, edge to edge,
+// through a point near the first circle's middle, at a fixed height clear of the hills under it. Where the plane is
 // comes from the clock (start + direction * speed * time); Expansion's airdrop plane flies
 // the same line so there's something to see.
 class BR_Flight
@@ -12,12 +12,10 @@ class BR_Flight
 	float speed;
 	float started;    // tick time it took off
 
-	static const float ROUTE_INSIDE = 0.75; // the route stays within this much of the circle's radius
+	static const float EDGE_MARGIN = 100; // m in from the map's edge (Expansion removes a plane that leaves the map)
 
-	// a route through the circle, ending well inside it and inside the box the map's
-	// buildings sit in: anyone still on board is dropped at the end, and the circle's edge
-	// (or empty land past the last buildings) is the worst place to land
-	static BR_Flight Plan(vector center, float radius, float minX, float maxX, float minZ, float maxZ, float height, float planeSpeed)
+	// a route right across the map, edge to edge, through a point near the circle's middle
+	static BR_Flight Plan(vector center, float radius, float worldSize, float height, float planeSpeed)
 	{
 		BR_Flight f = new BR_Flight();
 		f.speed = planeSpeed;
@@ -29,19 +27,11 @@ class BR_Flight
 		float heading = Math.RandomFloat(0, Math.PI2);
 		f.dir = Vector(Math.Cos(heading), 0, Math.Sin(heading));
 
-		// where the line p + dir * t enters and leaves the inner 75% of the circle
-		float inner = radius * ROUTE_INSIDE;
-		vector pc = Vector(p[0] - center[0], 0, p[2] - center[2]);
-		float b = f.dir[0] * pc[0] + f.dir[2] * pc[2];
-		float c = pc[0] * pc[0] + pc[2] * pc[2] - inner * inner;
-		float root = Math.Sqrt(Math.Max(b * b - c, 0));
-		float t0 = -b - root;
-		float t1 = -b + root;
-
-		// and where it leaves the buildings (500 m in from the outermost)
-		float margin = 500;
-		Clip(p[0], f.dir[0], minX + margin, maxX - margin, t0, t1);
-		Clip(p[2], f.dir[2], minZ + margin, maxZ - margin, t0, t1);
+		// where the line p + dir * t enters and leaves the map
+		float t0 = -1000000;
+		float t1 = 1000000;
+		Clip(p[0], f.dir[0], EDGE_MARGIN, worldSize - EDGE_MARGIN, t0, t1);
+		Clip(p[2], f.dir[2], EDGE_MARGIN, worldSize - EDGE_MARGIN, t0, t1);
 
 		f.from = p + f.dir * t0;
 		f.to = p + f.dir * t1;
@@ -85,6 +75,20 @@ class BR_Flight
 		vector p = from + dir * s;
 		p[1] = altitude;
 		return p;
+	}
+
+	// where the plane really is: it carries on past the end of the route to the map's edge
+	vector FlyingAt(float now)
+	{
+		vector p = from + dir * ((now - started) * speed);
+		p[1] = altitude;
+		return p;
+	}
+
+	bool OffMap(float now, float worldSize)
+	{
+		vector p = FlyingAt(now);
+		return p[0] < 0 || p[2] < 0 || p[0] > worldSize || p[2] > worldSize;
 	}
 
 	vector Velocity()

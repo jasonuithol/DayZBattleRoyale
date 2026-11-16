@@ -52,7 +52,7 @@ class BR_Settings
 		if (!s.phases || s.phases.Count() == 0)
 		{
 			s.phases = new array<ref BR_ZonePhase>();
-			s.phases.Insert(new BR_ZonePhase(210, 210, 0.7, 1));
+			s.phases.Insert(new BR_ZonePhase(300, 210, 0.7, 1)); // nothing shown for the first 5 minutes
 			s.phases.Insert(new BR_ZonePhase(180, 180, 0.65, 1));
 			s.phases.Insert(new BR_ZonePhase(150, 150, 0.6, 2));
 			s.phases.Insert(new BR_ZonePhase(120, 90, 0.55, 4));

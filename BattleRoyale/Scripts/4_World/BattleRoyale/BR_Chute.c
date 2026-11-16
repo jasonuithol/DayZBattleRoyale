@@ -7,7 +7,7 @@
 // fall damage a normal fall from that height would do.
 class BR_ChuteCommand: HumanCommandScript
 {
-	static const float FREEFALL_DOWN = 45;   // m/s
+	static const float FREEFALL_DOWN = 22.5; // m/s: half a real skydiver's, for more time to pick a spot
 	static const float FREEFALL_GLIDE = 30;  // m/s sideways, steering with the movement keys
 	static const float CHUTE_DOWN = 6;
 	static const float CHUTE_GLIDE = 9;

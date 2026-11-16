@@ -17,6 +17,7 @@ class BR_State
 	int phase;
 	bool inRound;      // this player is alive in the current round
 	bool inPlane;      // ... and still on the plane: F jumps
+	bool wholeMap;     // the start of a round: the whole map is safe, no circle drawn yet
 	vector center;     // the circle right now
 	float radius;
 	bool hasNext;      // the next circle is known (not after the last one has closed)
@@ -35,6 +36,7 @@ class BR_State
 		ctx.Write(phase);
 		ctx.Write(inRound);
 		ctx.Write(inPlane);
+		ctx.Write(wholeMap);
 		ctx.Write(center);
 		ctx.Write(radius);
 		ctx.Write(hasNext);
@@ -51,7 +53,7 @@ class BR_State
 
 	bool Read(ParamsReadContext ctx)
 	{
-		if (!ctx.Read(phase) || !ctx.Read(inRound) || !ctx.Read(inPlane) || !ctx.Read(center) || !ctx.Read(radius))
+		if (!ctx.Read(phase) || !ctx.Read(inRound) || !ctx.Read(inPlane) || !ctx.Read(wholeMap) || !ctx.Read(center) || !ctx.Read(radius))
 			return false;
 		if (!ctx.Read(hasNext) || !ctx.Read(nextCenter) || !ctx.Read(nextRadius))
 			return false;
@@ -63,6 +65,8 @@ class BR_State
 	// horizontal distance from pos to the circle's edge; positive means outside
 	float OutsideBy(vector pos)
 	{
+		if (wholeMap)
+			return -1;
 		return vector.Distance(Vector(pos[0], 0, pos[2]), Vector(center[0], 0, center[2])) - radius;
 	}
 }
@@ -121,9 +125,11 @@ class BR_Client
 		return BR_Plane.Now();
 	}
 
-	static void RequestJump()
+	// F: with where this game shows the plane, so the jump starts at the plane the player sees
+	static void RequestJump(vector seenPlane)
 	{
 		ScriptRPC rpc = new ScriptRPC();
+		rpc.Write(seenPlane);
 		rpc.Send(null, BR_State.RPC_JUMP, true, null);
 	}
 }
@@ -169,7 +175,7 @@ class BR_Steer
 // Server side: the round (5_Mission) listens here for jump requests.
 class BR_Server
 {
-	static ref ScriptInvoker s_OnJump = new ScriptInvoker(); // (PlayerIdentity sender)
+	static ref ScriptInvoker s_OnJump = new ScriptInvoker(); // (PlayerIdentity sender, vector seenPlane)
 }
 
 modded class DayZGame
@@ -198,7 +204,11 @@ modded class DayZGame
 		if (rpc_type == BR_State.RPC_JUMP)
 		{
 			if (IsServer() && sender)
-				BR_Server.s_OnJump.Invoke(sender);
+			{
+				vector seen;
+				ctx.Read(seen);
+				BR_Server.s_OnJump.Invoke(sender, seen);
+			}
 			return;
 		}
 		super.OnRPC(sender, target, rpc_type, ctx);

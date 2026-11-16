@@ -146,7 +146,7 @@ modded class MissionGameplay
 			return;
 		m_BR_JumpAsked = now;
 		Print("[BattleRoyale] F: in the plane " + state.inPlane + ", falling " + falling);
-		BR_Client.RequestJump();
+		BR_Client.RequestJump(BR_SeenPlane());
 	}
 
 	// FlyingWithoutCTD: capped for the whole time on a battle royale server (it comes back on

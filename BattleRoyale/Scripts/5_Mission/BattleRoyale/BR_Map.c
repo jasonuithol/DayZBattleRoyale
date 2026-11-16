@@ -24,6 +24,30 @@ modded class ExpansionMapMenu
 		return root;
 	}
 
+	// Always open zoomed out, centred on the player (or on the plane while watching from it:
+	// the character is standing in the lobby then), not where the map was last left
+	static const float BR_MAP_SCALE = 0.45; // Expansion: lower zooms in, 0.5 shows about the whole map
+
+	override protected void SetMapPosition()
+	{
+		if (!m_MapWidget)
+			return;
+		vector pos = GetGame().ConfigGetVector(string.Format("CfgWorlds %1 centerPosition", GetGame().GetWorldName()));
+		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+		if (BR_Plane.s_View)
+			pos = BR_SeenPlane();
+		else if (player)
+			pos = player.GetPosition();
+		m_MapWidget.SetScale(BR_MAP_SCALE);
+		m_MapWidget.SetMapPos(pos);
+	}
+
+	override void OnShow()
+	{
+		super.OnShow();
+		SetMapPosition();
+	}
+
 	override void Update(float timeslice)
 	{
 		super.Update(timeslice);
@@ -49,7 +73,8 @@ modded class ExpansionMapMenu
 
 		if (state.hasNext)
 			BR_Circle(state.nextCenter, state.nextRadius, 2, ARGB(255, 255, 255, 255));
-		BR_Circle(state.center, state.radius, 3, ARGB(255, 230, 50, 50));
+		if (!state.wholeMap) // at the start of a round the whole map is safe: no circles yet
+			BR_Circle(state.center, state.radius, 3, ARGB(255, 230, 50, 50));
 
 		if (state.flying)
 		{

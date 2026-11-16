@@ -36,7 +36,7 @@ modded class DayZPlayerCamera1stPersonUnconscious
 			forward = "0 0 1";
 		vector owner[4];
 		Math3D.DirectionAndUpMatrix(forward.Normalized(), "0 1 0", owner);
-		owner[3] = BR_Plane.Now();
+		owner[3] = BR_SeenPlane();
 		for (int i = 0; i < 4; i++)
 			pOutResult.m_OwnerTM[i] = owner[i];
 		pOutResult.m_bOwnerTMOverride = true;
@@ -60,6 +60,31 @@ modded class DayZPlayerCamera1stPersonUnconscious
 		pOutResult.m_bUpdateEveryFrame = true;
 		pOutResult.m_CollisionIgnoreEntity = m_pPlayer;
 	}
+}
+
+// The plane this game actually shows: Expansion's plane flies on its own here, and if this
+// game was still loading at take-off it starts late and trails the server's position. The
+// camera follows the one nearest the server's position, so it's always behind the plane
+// the player sees.
+vector BR_SeenPlane()
+{
+	vector where = BR_Plane.Now();
+	map<int, ExpansionAirdropPlaneBase> planes = ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes;
+	float best = 2000;
+	vector seen = where;
+	for (int i = 0; i < planes.Count(); i++)
+	{
+		ExpansionAirdropPlaneBase plane = planes.GetElement(i);
+		if (!plane)
+			continue;
+		float d = vector.Distance(plane.GetPosition(), where);
+		if (d < best)
+		{
+			best = d;
+			seen = plane.GetPosition();
+		}
+	}
+	return seen;
 }
 
 modded class DayZPlayerCameras

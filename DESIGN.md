@@ -114,3 +114,24 @@ screen effect and sickness.
 - **The lobby** is open, flat ground off the edge of the map, with a leash and no damage.
   Where it is doesn't matter.
 - **Test locally first.** Where it runs after that (probably the VPS) is a later question.
+
+## Decisions (2026-11-16)
+
+- **Spawn by plane, done.** One plane per round; players watch from behind it, F to jump, F to
+  open the parachute.
+- **Plane view:** the view from the plane is a player camera mode (the borrowed unconscious-camera
+  slot), not a scripted 'staticcamera', which left the view stuck once switched off.
+- **The parachute:**
+  - Steered by the client's own keys, sent to the server.
+  - Gravity off during the jump, with the height following a target. The server's height
+    wins, and the jumper's game follows it.
+  - The canopy is our own model (orange and white, ram-air).
+- **The circle:**
+  - Hidden for the first 5 minutes (the whole map is safe, no damage).
+  - Then it closes from around the whole map to the first white circle (5.6 km radius), with
+    gentle shrinks after that (70% → 40%).
+  - The next circle drifts off-centre by at most half the room it has.
+- **The plane:**
+  - The route runs edge to edge.
+  - Free fall at 22.5 m/s, half a real skydiver's, for more time to pick a spot.
+- **View distance:** capped all session through FlyingWithoutCTD.

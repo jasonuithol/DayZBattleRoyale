@@ -47,6 +47,7 @@ class BR_Round
 	protected float m_NextRadius;
 	protected int m_Stage;        // index into the settings' phases; Count() once the last one is done
 	protected bool m_Shrinking;
+	protected bool m_WholeMap;    // from take-off until the first shrink: the whole map is safe
 	protected float m_StageStarted;
 	protected float m_StageEnds;
 	protected float m_NextDrop;
@@ -309,7 +310,7 @@ class BR_Round
 		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
 		GetGame().GetWorld().SetDate(year, month, day, 12, 0);
 
-		m_Flight = BR_Flight.Plan(m_Center, m_Radius, m_MinX, m_MaxX, m_MinZ, m_MaxZ, m_Settings.planeHeight, m_Settings.planeSpeed);
+		m_Flight = BR_Flight.Plan(m_Center, m_Radius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 		m_Flight.TakeOff(Now());
 		BR_Plane.Set(m_Flight.PositionAt(Now()), m_Flight.Velocity());
 
@@ -333,9 +334,10 @@ class BR_Round
 		m_Stage = 0;
 		m_Shrinking = false;
 		BR_ZonePhase phase = m_Settings.phases[0];
-		PickNext(phase.radiusFraction);
+		PickNext(phase.radiusFraction);  // the white circle, from the start radius
+		m_WholeMap = true;               // ...but no circles shown (or damage) until the first shrink
 		m_StageEnds = Now() + phase.waitSeconds;
-		m_NextDrop = Now() + m_Settings.supplyDropSeconds;
+		m_NextDrop = m_StageEnds + m_Settings.supplyDropSeconds / 2; // not before the circle shows
 		UpdateMarkers();
 		m_Phase = BR_Phase.GAME;
 
@@ -343,25 +345,30 @@ class BR_Round
 		Announce("Round " + m_Round + ": the plane is taking off", "Its route is on the map (M). Press F to jump.");
 	}
 
-	// from the plane's position now, a little spread out so a crowd doesn't land in one heap
-	void Jump(PlayerBase player)
+	// from the plane, a little spread out so a crowd doesn't land in one heap: where the
+	// jumper's own game shows it (it can trail if the game was still loading at take-off),
+	// unless that's implausibly far from where it really is
+	void Jump(PlayerBase player, vector seenPlane = "0 0 0")
 	{
 		m_InPlane.Remove(player.GetIdentity().GetId());
-		vector pos = m_Flight.PositionAt(Now()) + Vector(Math.RandomFloat(-15, 15), -4, Math.RandomFloat(-15, 15));
+		vector plane = m_Flight.PositionAt(Now());
+		if (seenPlane != vector.Zero && vector.Distance(seenPlane, plane) < 300)
+			plane = seenPlane;
+		vector pos = plane + Vector(Math.RandomFloat(-15, 15), -4, Math.RandomFloat(-15, 15));
 		player.BR_StartChute(); // also no damage until just after landing
 		player.SetPosition(pos);
 		Print("[BattleRoyale] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");
 	}
 
 	// F: out of the plane, or (falling) open the chute
-	void OnJump(PlayerIdentity sender)
+	void OnJump(PlayerIdentity sender, vector seenPlane)
 	{
 		if (m_Phase != BR_Phase.GAME || !sender)
 			return;
 		PlayerBase player;
 		if (m_Flight && m_InPlane.Find(sender.GetId(), player) && player && player.IsAlive())
 		{
-			Jump(player);
+			Jump(player, seenPlane);
 			return;
 		}
 		if (m_Alive.Find(sender.GetId(), player) && player)
@@ -376,7 +383,7 @@ class BR_Round
 	{
 		if (!m_Flight)
 			return;
-		BR_Plane.Set(m_Flight.PositionAt(now), m_Flight.Velocity());
+		BR_Plane.Set(m_Flight.FlyingAt(now), m_Flight.Velocity());
 		if (!m_Flight.Over(now))
 			return;
 		// the end of the route: everyone still on board goes
@@ -389,7 +396,9 @@ class BR_Round
 		for (int j = 0; j < left.Count(); j++)
 			Jump(left[j]);
 		m_InPlane.Clear();
-		m_Flight = null;
+		// the route and the plane stay on the map until it has flown off it
+		if (m_Flight.OffMap(now, GetGame().GetWorld().GetWorldSize()))
+			m_Flight = null;
 	}
 
 	// --- the round in progress -------------------------------------------------------
@@ -425,7 +434,7 @@ class BR_Round
 		for (int a = 0; a < m_Alive.Count(); a++)
 		{
 			PlayerBase p = m_Alive.GetElement(a);
-			if (InPlane(p))
+			if (InPlane(p) || m_WholeMap)
 				continue;
 			if (BR_Loot.Distance2D(p.GetPosition(), m_Center) > m_Radius)
 				p.DecreaseHealth("", "", damage);
@@ -458,6 +467,14 @@ class BR_Round
 			m_Shrinking = true;
 			m_FromCenter = m_Center;
 			m_FromRadius = m_Radius;
+			if (m_WholeMap)
+			{
+				// the first shrink starts from around the whole map: a circle through its
+				// farthest corner
+				m_WholeMap = false;
+				m_FromRadius = WholeMapRadius(m_Center);
+				UpdateMarkers(); // the safe zone marker shows from now
+			}
 			m_StageStarted = now;
 			m_StageEnds = now + phase.shrinkSeconds;
 			Announce("The circle is closing", "Get inside the white circle on the map.");
@@ -481,6 +498,15 @@ class BR_Round
 			m_StageEnds = now + next.waitSeconds;
 		}
 		UpdateMarkers();
+	}
+
+	// the circle round the whole map from here: through its farthest corner
+	static float WholeMapRadius(vector center)
+	{
+		float size = GetGame().GetWorld().GetWorldSize();
+		float dx = Math.Max(center[0], size - center[0]);
+		float dz = Math.Max(center[2], size - center[2]);
+		return Math.Sqrt(dx * dx + dz * dz);
 	}
 
 	// keeps the first circle over the buildings: its centre at least r in from their edge, or in
@@ -577,7 +603,9 @@ class BR_Round
 		}
 		else if (m_Phase == BR_Phase.GAME)
 		{
-			if (m_Stage >= m_Settings.phases.Count())
+			if (m_WholeMap)
+				title = "The circle appears in " + Clock(m_StageEnds - now);
+			else if (m_Stage >= m_Settings.phases.Count())
 				title = "Final circle";
 			else if (m_Shrinking)
 				title = "Circle closing: " + Clock(m_StageEnds - now);
@@ -596,9 +624,10 @@ class BR_Round
 
 		BR_State state = new BR_State();
 		state.phase = m_Phase;
+		state.wholeMap = m_Phase == BR_Phase.GAME && m_WholeMap;
 		state.center = m_Center;
 		state.radius = m_Radius;
-		state.hasNext = m_Phase == BR_Phase.GAME && m_Stage < m_Settings.phases.Count();
+		state.hasNext = m_Phase == BR_Phase.GAME && m_Stage < m_Settings.phases.Count() && !m_WholeMap;
 		state.nextCenter = m_NextCenter;
 		state.nextRadius = m_NextRadius;
 		state.flying = m_Phase == BR_Phase.GAME && m_Flight != null;
@@ -607,7 +636,7 @@ class BR_Round
 		{
 			state.routeFrom = m_Flight.from;
 			state.routeTo = m_Flight.to;
-			state.planePos = m_Flight.PositionAt(now);
+			state.planePos = m_Flight.FlyingAt(now);
 			state.planeVel = m_Flight.Velocity();
 			planeLine = "Press F to jump. Everyone left is dropped at the end of the route in " + Clock(m_Flight.started + m_Flight.Duration() - now);
 		}
@@ -698,7 +727,7 @@ class BR_Round
 
 		// the plane over the whole-map circle
 		vector mapCenter = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
-		BR_Flight flight = BR_Flight.Plan(mapCenter, m_Settings.startRadius, m_MinX, m_MaxX, m_MinZ, m_MaxZ, m_Settings.planeHeight, m_Settings.planeSpeed);
+		BR_Flight flight = BR_Flight.Plan(mapCenter, m_Settings.startRadius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 		int planesBefore = ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count();
 		flight.TakeOff(Now());
 		Print("[BRTest] plane route " + flight.from + " -> " + flight.to + ", " + flight.length + " m at " + flight.altitude + " m, " + flight.Duration() + " s; planes " + planesBefore + " -> " + ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count() + "; halfway at " + flight.PositionAt(Now() + flight.Duration() / 2));
@@ -767,7 +796,7 @@ class BR_Round
 		ClearMarkers();
 		ExpansionMarkerModule module;
 		CF_Modules<ExpansionMarkerModule>.Get(module);
-		if (!module || m_Stage >= m_Settings.phases.Count())
+		if (!module || m_Stage >= m_Settings.phases.Count() || m_WholeMap)
 			return;
 		ExpansionMarkerData centre = module.CreateServerMarker("Safe zone", "Star", m_NextCenter, ARGB(255, 255, 255, 255), true);
 		if (centre)

@@ -14,7 +14,7 @@
     "planeSpeed": 120,
     "planeHeight": 400,
     "phases": [
-        { "waitSeconds": 210, "shrinkSeconds": 210, "radiusFraction": 0.7,  "damagePerSecond": 1 },
+        { "waitSeconds": 300, "shrinkSeconds": 210, "radiusFraction": 0.7,  "damagePerSecond": 1 },
         { "waitSeconds": 180, "shrinkSeconds": 180, "radiusFraction": 0.65, "damagePerSecond": 1 },
         { "waitSeconds": 150, "shrinkSeconds": 150, "radiusFraction": 0.6,  "damagePerSecond": 2 },
         { "waitSeconds": 120, "shrinkSeconds": 90,  "radiusFraction": 0.55, "damagePerSecond": 4 },
