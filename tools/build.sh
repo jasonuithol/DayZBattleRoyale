@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Stage the BattleRoyale mod for packing: copies BattleRoyale/ to build/BattleRoyale/ with
+# Stage the BattleDayZ mod for packing: copies BattleDayZ/ to build/BattleDayZ/ with
 # every .p3d binarized (ODOL, model.cfg baked in); scripts, config, layouts, textures and
 # materials are copied through as they are. DayZMissions' tools/build_mod.py packs and
-# signs build/BattleRoyale as @BattleRoyale (~/Projects/DayZMissions/mods/BattleRoyale).
+# signs build/BattleDayZ as @BattleDayZ (~/Projects/DayZMissions/mods/BattleDayZ).
 #
 #   tools/make_parachute_textures.py                         # after changing the texture
 #   blender --background --python blender/build_parachute.py # after changing the model
@@ -10,10 +10,10 @@
 #
 # Binarize runs under GE-Proton in its own prefix (shared with img2paa.sh; never the DayZ
 # Tools prefix in compatdata/). It scans its whole drive for addons, so the source gets a
-# drive of its own: P: is a scratch copy of BattleRoyale/, O: the output.
+# drive of its own: P: is a scratch copy of BattleDayZ/, O: the output.
 set -euo pipefail
 
-MOD=BattleRoyale
+MOD=BattleDayZ
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STEAM_ROOT="${STEAM_ROOT:-$HOME/.steam/debian-installation}"
 GE="$(ls -d "$STEAM_ROOT"/compatibilitytools.d/GE-Proton* | sort -V | tail -n1)"

@@ -26,7 +26,7 @@ modded class MissionGameplay
 	override void OnMissionStart()
 	{
 		super.OnMissionStart();
-		m_BR_Root = GetGame().GetWorkspace().CreateWidgets("BattleRoyale/gui/layouts/br_hud.layout");
+		m_BR_Root = GetGame().GetWorkspace().CreateWidgets("BattleDayZ/gui/layouts/br_hud.layout");
 		if (m_BR_Root)
 		{
 			m_BR_Title = TextWidget.Cast(m_BR_Root.FindAnyWidget("Title"));
@@ -67,7 +67,7 @@ modded class MissionGameplay
 		BR_State state = BR_Client.s_State;
 		if (!player || !state || state.phase != BR_Phase.GAME)
 			return;
-		Print("[BattleRoyale] heartbeat: " + BR_ChuteCommand.HeightAboveGround(player.GetPosition()) + " m up, chuting " + player.BR_IsChuting() + ", command " + player.GetCommand_Script());
+		Print("[BattleDayZ] heartbeat: " + BR_ChuteCommand.HeightAboveGround(player.GetPosition()) + " m up, chuting " + player.BR_IsChuting() + ", command " + player.GetCommand_Script());
 	}
 
 	protected void BR_UpdateHud()
@@ -139,7 +139,7 @@ modded class MissionGameplay
 			}
 		}
 		if (BR_Plane.s_View != riding)
-			Print("[BattleRoyale] plane view " + riding);
+			Print("[BattleDayZ] plane view " + riding);
 		BR_Plane.SetView(riding);
 
 
@@ -170,7 +170,7 @@ modded class MissionGameplay
 		if (now - m_BR_JumpAsked < 1)
 			return;
 		m_BR_JumpAsked = now;
-		Print("[BattleRoyale] F: in the plane " + state.inPlane + ", falling " + falling);
+		Print("[BattleDayZ] F: in the plane " + state.inPlane + ", falling " + falling);
 		BR_Client.RequestJump(BR_SeenPlane());
 	}
 

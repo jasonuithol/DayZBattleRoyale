@@ -1,4 +1,4 @@
-# DayZ Battle Royale
+# BattleDayZ
 
 Solo battle royale rounds on DayZ, starting with Nasdara. This is the simplest version of
 every feature, built to get a playable demo running. `DESIGN.md` has the bigger picture and
@@ -105,7 +105,7 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
 
 ## Layout
 
-- `BattleRoyale/`: the mod, loaded on the server and on clients.
+- `BattleDayZ/`: the mod, loaded on the server and on clients.
   - `3_Game`: the state the server sends each player every second (and where the circle is
     between updates), the jump and steering messages, and where the plane is.
   - `4_World`:
@@ -139,7 +139,7 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
   seen from both sides, with no collision or shadow. `tools/make_stormwall_texture.py` makes
   its see-through texture (source in `textures/`). Its glow is in `data/stormwall.rvmat`.
   `model.cfg` is shared, and `build_parachute.py` writes it.
-- `tools/build.sh`: stages the mod in `build/BattleRoyale`, with the model binarized.
+- `tools/build.sh`: stages the mod in `build/BattleDayZ`, with the model binarized.
 
 **Mods it needs:**
 - From Expansion (the planes, supply drops, the map on M, server markers, notifications):
@@ -151,8 +151,8 @@ The full list is in `mission/mods.txt`.
 
 ## Running it
 
-It uses the DayZMissions tooling. `~/Projects/DayZMissions/mods/BattleRoyale` links to the
-staged build, `build/BattleRoyale`, and `missions/battleroyale.nasdara` links to `mission/`.
+It uses the DayZMissions tooling. `~/Projects/DayZMissions/mods/BattleDayZ` links to the
+staged build, `build/BattleDayZ`, and `missions/battleroyale.nasdara` links to `mission/`.
 Run `tools/build.sh` after any change to the mod, scripts included, before starting a
 server.
 

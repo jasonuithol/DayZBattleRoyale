@@ -65,13 +65,13 @@ class BR_ChuteCommand: HumanCommandScript
 	override void OnActivate()
 	{
 		dBodyEnableGravity(m_Player, false);
-		Print("[BattleRoyale] chute command started (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up");
+		Print("[BattleDayZ] chute command started (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up");
 	}
 
 	override void OnDeactivate()
 	{
 		dBodyEnableGravity(m_Player, true);
-		Print("[BattleRoyale] chute command ended (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up, open " + m_Open + ", " + m_Pre + " pre / " + m_Post + " post updates");
+		Print("[BattleDayZ] chute command ended (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up, open " + m_Open + ", " + m_Pre + " pre / " + m_Post + " post updates");
 	}
 
 	override void PreAnimUpdate(float pDt)
@@ -172,7 +172,7 @@ class BR_ChuteCommand: HumanCommandScript
 		if (BR_Debug.LOG && m_Age - m_LogAt >= 2)
 		{
 			m_LogAt = m_Age;
-			Print("[BattleRoyale] chute (" + m_Player.GetInstanceType() + ") t " + m_Age + " agl " + agl + " y " + pos[1] + " target " + m_TargetY + " open " + m_Open + " input " + m_Speed + " " + m_Dir + " pre " + m_Pre + " post " + m_Post);
+			Print("[BattleDayZ] chute (" + m_Player.GetInstanceType() + ") t " + m_Age + " agl " + agl + " y " + pos[1] + " target " + m_TargetY + " open " + m_Open + " input " + m_Speed + " " + m_Dir + " pre " + m_Pre + " post " + m_Post);
 		}
 	}
 
@@ -181,7 +181,7 @@ class BR_ChuteCommand: HumanCommandScript
 		if (m_Landing)
 			return;
 		m_Landing = true; // finished next frame, in PreAnimUpdate
-		Print("[BattleRoyale] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up");
+		Print("[BattleDayZ] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up");
 	}
 
 	override bool PostPhysUpdate(float pDt)
@@ -278,7 +278,7 @@ modded class PlayerBase
 
 	// The canopy every game shows above every jumper whose chute is open (this one included):
 	// a local, visual-only object (no collision) attached to the character, so it follows and
-	// turns with them. Model: BattleRoyale/data/parachute.p3d (blender/build_parachute.py).
+	// turns with them. Model: BattleDayZ/data/parachute.p3d (blender/build_parachute.py).
 	protected void BR_Canopy(bool open)
 	{
 		if (GetGame().IsDedicatedServer())
@@ -323,7 +323,7 @@ modded class PlayerBase
 		if (BR_Debug.LOG && now - m_BR_LoggedAt >= 1)
 		{
 			m_BR_LoggedAt = now;
-			Print("[BattleRoyale] jumping (" + GetInstanceType() + "): command " + pCurrentCommandID + ", ours " + (chute != null) + ", finished " + pCurrentCommandFinished + ", " + BR_ChuteCommand.HeightAboveGround(GetPosition()) + " m up");
+			Print("[BattleDayZ] jumping (" + GetInstanceType() + "): command " + pCurrentCommandID + ", ours " + (chute != null) + ", finished " + pCurrentCommandFinished + ", " + BR_ChuteCommand.HeightAboveGround(GetPosition()) + " m up");
 		}
 		if (pCurrentCommandID == DayZPlayerConstants.COMMANDID_SCRIPT && chute)
 		{

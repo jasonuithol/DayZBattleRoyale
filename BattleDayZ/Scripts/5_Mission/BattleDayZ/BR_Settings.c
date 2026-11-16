@@ -62,10 +62,10 @@ class BR_Settings
 		if (FileExist(FILE))
 		{
 			if (!JsonFileLoader<BR_Settings>.LoadFile(FILE, s, error))
-				Print("[BattleRoyale] " + FILE + ": " + error + " - using the defaults");
+				Print("[BattleDayZ] " + FILE + ": " + error + " - using the defaults");
 		}
 		else
-			Print("[BattleRoyale] no " + FILE + " - using the defaults");
+			Print("[BattleDayZ] no " + FILE + " - using the defaults");
 
 		array<int> seconds = {300, 240, 180, 120, 60, 30};
 		array<float> fractions = {0.7, 0.65, 0.6, 0.55, 0.5, 0.4, 0.5};
@@ -116,7 +116,7 @@ class BR_Spots
 		BR_Spots s = new BR_Spots();
 		string error;
 		if (!JsonFileLoader<BR_Spots>.LoadFile(FILE, s, error))
-			Print("[BattleRoyale] " + FILE + ": " + error);
+			Print("[BattleDayZ] " + FILE + ": " + error);
 		if (!s.protos)
 			s.protos = new array<ref BR_Proto>();
 		if (!s.buildings)

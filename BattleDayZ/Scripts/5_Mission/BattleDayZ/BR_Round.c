@@ -99,7 +99,7 @@ class BR_Round
 		{
 			if (!BR_Loot.TypeExists(types[t]))
 			{
-				Print("[BattleRoyale] unknown class name in the loot: " + types[t]);
+				Print("[BattleDayZ] unknown class name in the loot: " + types[t]);
 				missing++;
 			}
 		}
@@ -125,7 +125,7 @@ class BR_Round
 		string test;
 		if (!GetGame().CommandlineGetParam("missiontest", test))
 			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(PrepareRound, 30000, false);
-		Print("[BattleRoyale] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
+		Print("[BattleDayZ] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(Tick, 1000, true);
 	}
@@ -216,7 +216,7 @@ class BR_Round
 			return;
 		BR_Loot.Kit(player);
 		m_LobbyReset.Set(id, player);
-		Print("[BattleRoyale] " + player.GetIdentity().GetName() + " reset in the lobby");
+		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " reset in the lobby");
 	}
 
 	void KeepInLobby(PlayerBase player)
@@ -257,7 +257,7 @@ class BR_Round
 			if (bestScore > 0.99)
 				break;
 		}
-		Print("[BattleRoyale] lobby ground: " + best + ", flatness " + bestScore);
+		Print("[BattleDayZ] lobby ground: " + best + ", flatness " + bestScore);
 		return best;
 	}
 
@@ -322,7 +322,7 @@ class BR_Round
 		int cars = BR_Loot.Cars(m_Spots, m_Center, m_Radius, m_Settings.cars, m_Settings.carFuel, m_Spawned);
 		m_Prepared = true;
 		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
-		Print("[BattleRoyale] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, put out over " + seconds + " s");
+		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, put out over " + seconds + " s");
 	}
 
 	// --- starting a round: everyone in the lobby onto the plane ------------------------
@@ -384,7 +384,7 @@ class BR_Round
 		AddBots();
 		UpdateMarkers();
 
-		Print("[BattleRoyale] round " + m_Round + " started: " + m_Started + " players, circle " + m_Center + " r " + m_Radius + ", plane " + m_Flight.from + " -> " + m_Flight.to + " (" + m_Flight.length + " m at " + m_Flight.altitude + " m, " + m_Flight.Duration() + " s)");
+		Print("[BattleDayZ] round " + m_Round + " started: " + m_Started + " players, circle " + m_Center + " r " + m_Radius + ", plane " + m_Flight.from + " -> " + m_Flight.to + " (" + m_Flight.length + " m at " + m_Flight.altitude + " m, " + m_Flight.Duration() + " s)");
 		Announce("Round " + m_Round + ": the plane is taking off", "Its route is on the map (M). Press F to jump.");
 	}
 
@@ -435,7 +435,7 @@ class BR_Round
 		m_Radius = m_FromRadius;
 		m_StageStarted = now;
 		m_StageEnds = now + Math.Min(TEST_STORM_SECONDS, m_Settings.CircleSeconds(1));
-		Print("[BattleRoyale] round " + m_Round + " started (testStorm): " + m_Started + " players at " + spot + ", white r " + m_NextRadius + " at " + m_NextCenter + ", red r " + m_Radius + " closing over " + (m_StageEnds - now) + " s");
+		Print("[BattleDayZ] round " + m_Round + " started (testStorm): " + m_Started + " players at " + spot + ", white r " + m_NextRadius + " at " + m_NextCenter + ", red r " + m_Radius + " closing over " + (m_StageEnds - now) + " s");
 		Announce("Round " + m_Round + " (storm test)", "The storm is coming: get inside the white circle on the map.");
 	}
 
@@ -451,7 +451,7 @@ class BR_Round
 		vector pos = plane + Vector(Math.RandomFloat(-15, 15), -4, Math.RandomFloat(-15, 15));
 		player.BR_StartChute(); // also no damage until just after landing
 		player.SetPosition(pos);
-		Print("[BattleRoyale] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");
+		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");
 	}
 
 	// F: out of the plane, or (falling) open the chute
@@ -467,7 +467,7 @@ class BR_Round
 		}
 		if (m_Alive.Find(sender.GetId(), player) && player)
 		{
-			Print("[BattleRoyale] " + sender.GetName() + " pressed F, " + BR_ChuteCommand.HeightAboveGround(player.GetPosition()) + " m above the ground, chuting " + player.BR_IsChuting() + ", command " + player.GetCommand_Script());
+			Print("[BattleDayZ] " + sender.GetName() + " pressed F, " + BR_ChuteCommand.HeightAboveGround(player.GetPosition()) + " m above the ground, chuting " + player.BR_IsChuting() + ", command " + player.GetCommand_Script());
 			if (player.BR_IsChuting())
 				player.BR_OpenChute();
 		}
@@ -511,7 +511,7 @@ class BR_Round
 			if (player && !player.IsAlive() && m_Spawned.Find(player) < 0)
 				m_Spawned.Insert(player); // the body goes with the round
 			m_LastOut = m_Names.Get(id);
-			Print("[BattleRoyale] " + m_LastOut + " is out, " + m_Alive.Count() + " left");
+			Print("[BattleDayZ] " + m_LastOut + " is out, " + m_Alive.Count() + " left");
 			if (m_Alive.Count() > 1)
 				Announce(m_LastOut + " is out", m_Alive.Count().ToString() + " left.");
 		}
@@ -549,7 +549,7 @@ class BR_Round
 			vector drop = m_NextCenter + Vector(Math.Cos(angle) * dist, 0, Math.Sin(angle) * dist);
 			if (BR_Loot.SupplyDrop(drop))
 			{
-				Print("[BattleRoyale] supply drop to " + drop);
+				Print("[BattleDayZ] supply drop to " + drop);
 				Announce("Supply drop", "A plane is on its way. Watch the map.");
 			}
 		}
@@ -581,7 +581,7 @@ class BR_Round
 				if (m_Radius <= 0)
 				{
 					m_Storm = true;
-					Print("[BattleRoyale] circle " + m_Circle + ": closed to nothing, the storm is everywhere");
+					Print("[BattleDayZ] circle " + m_Circle + ": closed to nothing, the storm is everywhere");
 					UpdateMarkers();
 					Announce("The storm is everywhere", "Last one standing wins.");
 					return;
@@ -597,7 +597,7 @@ class BR_Round
 			m_Revealed = true;
 			m_StageStarted = now;
 			m_StageEnds = now + m_Settings.CircleSeconds(m_Circle);
-			Print("[BattleRoyale] circle " + m_Circle + ": white circle revealed at " + m_NextCenter + " r " + m_NextRadius + ", closes in " + m_Settings.CircleSeconds(m_Circle) + " s");
+			Print("[BattleDayZ] circle " + m_Circle + ": white circle revealed at " + m_NextCenter + " r " + m_NextRadius + ", closes in " + m_Settings.CircleSeconds(m_Circle) + " s");
 			UpdateMarkers();
 			if (m_NextRadius > 0)
 				Announce("The next circle is on the map", "It starts closing in " + Clock(m_StageEnds - now) + ".");
@@ -621,7 +621,7 @@ class BR_Round
 		m_Circle++;
 		m_StageStarted = now;
 		m_StageEnds = now + m_Settings.CircleSeconds(m_Circle);
-		Print("[BattleRoyale] circle " + m_Circle + ": red closing from r " + m_FromRadius + " to r " + m_NextRadius + " over " + m_Settings.CircleSeconds(m_Circle) + " s");
+		Print("[BattleDayZ] circle " + m_Circle + ": red closing from r " + m_FromRadius + " to r " + m_NextRadius + " over " + m_Settings.CircleSeconds(m_Circle) + " s");
 		Announce("The circle is closing", "Get inside the white circle on the map.");
 	}
 
@@ -646,7 +646,7 @@ class BR_Round
 			m_Alive.Set(id, bot);
 			m_Names.Set(id, "Bot " + b);
 			m_Started++;
-			Print("[BattleRoyale] Bot " + b + " joins the round at " + bot.GetPosition());
+			Print("[BattleDayZ] Bot " + b + " joins the round at " + bot.GetPosition());
 		}
 	}
 
@@ -718,7 +718,7 @@ class BR_Round
 			m_Winner = "";
 			Announce("Nobody wins", "Round " + m_Round + " is over.");
 		}
-		Print("[BattleRoyale] round " + m_Round + " over, winner: '" + m_Winner + "'");
+		Print("[BattleDayZ] round " + m_Round + " over, winner: '" + m_Winner + "'");
 	}
 
 	// everything the round spawned goes, and so does the round's roster: the winner
@@ -743,7 +743,7 @@ class BR_Round
 		m_Alive.Clear();
 		ClearMarkers();
 		if (count + drops > 0)
-			Print("[BattleRoyale] cleaned up " + count + " things and " + drops + " supply drops");
+			Print("[BattleDayZ] cleaned up " + count + " things and " + drops + " supply drops");
 	}
 
 	// --- telling players -------------------------------------------------------------

@@ -124,7 +124,7 @@ class BR_Flight
 		ExpansionAirdropPlaneBase plane = ExpansionAirdropPlaneBase.Cast(GetGame().CreateObjectEx(type, start, flags));
 		if (!plane)
 		{
-			Print("[BattleRoyale] couldn't create the plane (" + type + ")");
+			Print("[BattleDayZ] couldn't create the plane (" + type + ")");
 			return;
 		}
 		if (ExpansionAirdropPlaneBase.s_Expansion_CreatePlaneOnClient)

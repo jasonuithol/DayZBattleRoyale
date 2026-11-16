@@ -1,4 +1,4 @@
-// Battle Royale on Nasdara: the vanilla Nasdara mission with the BattleRoyale mod running the
+// Battle Royale on Nasdara: the vanilla Nasdara mission with the BattleDayZ mod running the
 // rounds. The economy spawns no loot, cars, zombies or animals (db/economy.xml): the mod puts
 // out its own loot and cars each round and removes them afterwards.
 //

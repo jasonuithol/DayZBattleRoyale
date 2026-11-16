@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Make the parachute's texture and material (all our own, drawn here; no game textures
-are copied). Results go in BattleRoyale/data/:
+are copied). Results go in BattleDayZ/data/:
 
   parachute_co.paa     colour: alternating deep orange and off-white cells, dark seam
                        tapes along the ribs, dark trim round the cell mouths and the
@@ -34,7 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STEAM = os.environ.get('STEAM_ROOT', os.path.expanduser('~/.steam/debian-installation'))
 ADDONS = os.path.join(STEAM, 'steamapps/common/DayZ/Addons')
 SRC = os.path.join(ROOT, 'textures')
-DATA = os.path.join(ROOT, 'BattleRoyale', 'data')
+DATA = os.path.join(ROOT, 'BattleDayZ', 'data')
 N = L.ATLAS
 RNG = np.random.default_rng(23)
 
@@ -140,7 +140,7 @@ def num(v):
 def write_rvmat(path):
     tent = derap(pbo_file(os.path.join(ADDONS, 'gear_camping.pbo'), 'data/tent_medium_pitched.rvmat'))
     tex = {
-        'Stage1': 'BattleRoyale\\data\\parachute_nohq.paa',
+        'Stage1': 'BattleDayZ\\data\\parachute_nohq.paa',
         # Stage2-4: the tent's own neutral detail, macro and ambient-shadow stages
         'Stage5': '#(argb,8,8,3)color(1,0.32,0.42,1,SMDI)',   # nylon: a soft, broad sheen
     }

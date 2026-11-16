@@ -1,6 +1,6 @@
 class CfgPatches
 {
-	class BattleRoyale
+	class BattleDayZ
 	{
 		units[] = {};
 		weapons[] = {};
@@ -11,10 +11,10 @@ class CfgPatches
 
 class CfgMods
 {
-	class BattleRoyale
+	class BattleDayZ
 	{
-		dir = "BattleRoyale";
-		name = "Battle Royale";
+		dir = "BattleDayZ";
+		name = "BattleDayZ";
 		type = "mod";
 		dependencies[] = {"Game", "World", "Mission"};
 
@@ -23,17 +23,17 @@ class CfgMods
 			class gameScriptModule
 			{
 				value = "";
-				files[] = {"BattleRoyale/Scripts/3_Game"};
+				files[] = {"BattleDayZ/Scripts/3_Game"};
 			};
 			class worldScriptModule
 			{
 				value = "";
-				files[] = {"BattleRoyale/Scripts/4_World"};
+				files[] = {"BattleDayZ/Scripts/4_World"};
 			};
 			class missionScriptModule
 			{
 				value = "";
-				files[] = {"BattleRoyale/Scripts/5_Mission"};
+				files[] = {"BattleDayZ/Scripts/5_Mission"};
 			};
 		};
 	};
@@ -48,12 +48,12 @@ class CfgVehicles
 	class BR_Parachute: HouseNoDestruct
 	{
 		scope = 1;
-		model = "\BattleRoyale\data\parachute.p3d";
+		model = "\BattleDayZ\data\parachute.p3d";
 	};
 	// one 10 m panel of the glowing wall along the circle's edge (client-only, no collision)
 	class BR_StormWall: HouseNoDestruct
 	{
 		scope = 1;
-		model = "\BattleRoyale\data\stormwall.p3d";
+		model = "\BattleDayZ\data\stormwall.p3d";
 	};
 };

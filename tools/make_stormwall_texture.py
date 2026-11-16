@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The storm wall's texture: textures/stormwall_ca.png -> BattleRoyale/data/stormwall_ca.paa.
+"""The storm wall's texture: textures/stormwall_ca.png -> BattleDayZ/data/stormwall_ca.paa.
 
 A see-through red glow, strongest at the ground and fading out towards the top, with a
 bright line along the ground (the circle you can see on the terrain), a few faint
@@ -38,7 +38,7 @@ def main():
     os.makedirs(tex, exist_ok=True)
     png = os.path.join(tex, "stormwall_ca.png")
     img.save(png)
-    subprocess.run([os.path.join(ROOT, "tools", "img2paa.sh"), png, os.path.join(ROOT, "BattleRoyale", "data")], check=True)
+    subprocess.run([os.path.join(ROOT, "tools", "img2paa.sh"), png, os.path.join(ROOT, "BattleDayZ", "data")], check=True)
 
 
 if __name__ == "__main__":

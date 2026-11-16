@@ -5,7 +5,7 @@ Run headless (from the project root):
     blender --background --python blender/build_stormwall.py
 
 Outputs:
-    BattleRoyale/data/stormwall.p3d   MLOD P3D (needs the Arma 3 Object Builder add-on): one
+    BattleDayZ/data/stormwall.p3d   MLOD P3D (needs the Arma 3 Object Builder add-on): one
                                       visual LOD, both sides of the panel, and an empty
                                       Geometry LOD (autocenter = 0), so it collides with
                                       nothing and casts no shadow
@@ -26,8 +26,8 @@ import bpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "models")
-DATA_DIR = os.path.join(ROOT, "BattleRoyale", "data")
-TEX = ("BattleRoyale\\data\\stormwall_ca.paa", "BattleRoyale\\data\\stormwall.rvmat")
+DATA_DIR = os.path.join(ROOT, "BattleDayZ", "data")
+TEX = ("BattleDayZ\\data\\stormwall_ca.paa", "BattleDayZ\\data\\stormwall.rvmat")
 A3OB_MODULE = "bl_ext.user_default.Arma3ObjectBuilder"
 LOD_VISUAL, LOD_GEOMETRY = "0", "6"
 

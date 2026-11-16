@@ -87,7 +87,7 @@ class BR_Loot
 		EntityAI item = EntityAI.Cast(GetGame().CreateObjectEx(type, pos, ECE_SETUP | ECE_UPDATEPATHGRAPH | ECE_CREATEPHYSICS));
 		if (!item)
 		{
-			Print("[BattleRoyale] could not create " + type);
+			Print("[BattleDayZ] could not create " + type);
 			return null;
 		}
 		item.SetOrientation(Vector(Math.RandomFloat(0, 360), 0, 0));

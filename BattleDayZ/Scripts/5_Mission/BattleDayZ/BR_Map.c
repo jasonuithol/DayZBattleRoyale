@@ -19,7 +19,7 @@ modded class ExpansionMapMenu
 		{
 			m_BR_Canvas = CanvasWidget.Cast(layoutRoot.FindAnyWidget("BR_MapCanvas"));
 			if (!m_BR_Canvas)
-				m_BR_Canvas = CanvasWidget.Cast(GetGame().GetWorkspace().CreateWidgets("BattleRoyale/gui/layouts/br_mapcanvas.layout", layoutRoot));
+				m_BR_Canvas = CanvasWidget.Cast(GetGame().GetWorkspace().CreateWidgets("BattleDayZ/gui/layouts/br_mapcanvas.layout", layoutRoot));
 		}
 		return root;
 	}

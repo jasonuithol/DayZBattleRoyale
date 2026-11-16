@@ -8,8 +8,8 @@
 2792984722 @DayZ-Expansion-Navigation
 2792984177 @DayZ-Expansion-Missions
 # ours. FlyingWithoutCTD (workshop 3839393469) caps the view distance on the plane and the way
-# down, which would otherwise freeze the game. BattleRoyale is built from
-# ../DayZBattleRoyale/BattleRoyale (DayZMissions mods/BattleRoyale links to it); players need it
+# down, which would otherwise freeze the game. BattleDayZ is built from
+# ../DayZBattleRoyale/BattleDayZ (DayZMissions mods/BattleDayZ links to it); players need it
 # too (HUD, F, the map lines, the blue screen outside the circle).
 local @FlyingWithoutCTD
-local @BattleRoyale
+local @BattleDayZ

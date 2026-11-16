@@ -5,11 +5,11 @@ Run headless (from the project root):
     blender --background --python blender/build_parachute.py
 
 Outputs:
-    BattleRoyale/data/parachute.p3d   MLOD P3D (needs the Arma 3 Object Builder add-on):
+    BattleDayZ/data/parachute.p3d   MLOD P3D (needs the Arma 3 Object Builder add-on):
                                       LOD 1 (detailed) and LOD 2 (distance), visual only:
                                       no geometry, fire geometry or memory LODs, so it
                                       collides with nothing
-    BattleRoyale/data/model.cfg       class parachute, no skeleton
+    BattleDayZ/data/model.cfg       class parachute, no skeleton
     models/parachute.blend            source scene, one collection per LOD (plus Preview)
     models/parachute_*.png            preview renders (textured from textures/*.png, which
                                       tools/make_parachute_textures.py makes)
@@ -40,9 +40,9 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import parachute_layout as L  # noqa: E402
 
 OUT_DIR = os.path.join(ROOT, "models")
-DATA_DIR = os.path.join(ROOT, "BattleRoyale", "data")   # PBO prefix BattleRoyale
+DATA_DIR = os.path.join(ROOT, "BattleDayZ", "data")   # PBO prefix BattleDayZ
 TEX_DIR = os.path.join(ROOT, "textures")
-CANOPY_TEX = ("BattleRoyale\\data\\parachute_co.paa", "BattleRoyale\\data\\parachute.rvmat")
+CANOPY_TEX = ("BattleDayZ\\data\\parachute_co.paa", "BattleDayZ\\data\\parachute.rvmat")
 
 # --- shape ---------------------------------------------------------------------------
 TIP_ANGLE = math.radians(46)    # slope of the canopy at the tips (anhedral)
