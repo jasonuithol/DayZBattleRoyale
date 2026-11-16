@@ -319,7 +319,7 @@ class BR_Round
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
 		int items = m_Spawned.Count();
-		int cars = BR_Loot.Cars(m_Spots, m_Center, m_Radius, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
+		int cars = BR_Loot.Cars(m_Spots, m_Center, m_Radius, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned, m_Settings.carSquare, m_Settings.carHotspots);
 		m_Prepared = true;
 		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
 		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, put out over " + seconds + " s");
@@ -887,6 +887,62 @@ class BR_Round
 			}
 		}
 		Print("[BRTest] vehicles: " + m_Settings.vehicles.Count() + " in the list, " + noSuchVehicle + " unknown classes");
+
+		// where a round's vehicles would go: counted on a 4 x 4 grid of the map (north row first),
+		// against the vanilla car spots, and how long the picking takes
+		vector whole = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
+		array<vector> where = new array<vector>();
+		array<float> headings = new array<float>();
+		int pickStart = GetGame().GetTime();
+		int atHotspots = BR_Loot.CarSpots(m_Spots, whole, m_Settings.startRadius, m_Settings.cars, m_Settings.carSquare, m_Settings.carHotspots, where, headings);
+		int pickMs = GetGame().GetTime() - pickStart;
+		Print("[BRTest] car spread: " + BR_Loot.s_Squares + " squares, " + BR_Loot.s_EmptySquares + " with no spot found; rejected: edge " + BR_Loot.s_Why[0] + ", water " + BR_Loot.s_Why[1] + ", slope " + BR_Loot.s_Why[2] + ", bumpy " + BR_Loot.s_Why[3] + ", near a car " + BR_Loot.s_Why[4] + ", objects " + BR_Loot.s_Why[5]);
+		int vanillaUsed = 0;
+		foreach (vector wp : where)
+		{
+			foreach (BR_CarSpot vs : m_Spots.cars)
+			{
+				if (Math.AbsFloat(vs.x - wp[0]) < 0.01 && Math.AbsFloat(vs.z - wp[2]) < 0.01)
+					vanillaUsed++;
+			}
+		}
+		Print("[BRTest] car spread: " + where.Count() + " of " + m_Settings.cars + " placed in " + pickMs + " ms, " + atHotspots + " at hotspots, " + vanillaUsed + " at vanilla spots");
+		for (int row = 3; row >= 0; row--)
+		{
+			string line = "";
+			string vline = "";
+			for (int col = 0; col < 4; col++)
+			{
+				int here = 0;
+				int vhere = 0;
+				foreach (vector cp : where)
+				{
+					if (Math.Floor(cp[0] / 4096) == col && Math.Floor(cp[2] / 4096) == row)
+						here++;
+				}
+				foreach (BR_CarSpot cv : m_Spots.cars)
+				{
+					if (Math.Floor(cv.x / 4096) == col && Math.Floor(cv.z / 4096) == row)
+						vhere++;
+				}
+				line += " " + here;
+				vline += " " + vhere;
+			}
+			Print("[BRTest] car spread row " + row + ":" + line + "   (vanilla spots:" + vline + ")");
+		}
+		foreach (string hs : m_Settings.carHotspots)
+		{
+			array<string> f = new array<string>();
+			hs.Split(" ", f);
+			vector hc = Vector(f[0].ToFloat(), 0, f[1].ToFloat());
+			int nearHs = 0;
+			foreach (vector hp : where)
+			{
+				if (BR_Loot.Distance2D(hp, hc) <= f[2].ToFloat())
+					nearHs++;
+			}
+			Print("[BRTest] car spread: " + nearHs + " within " + f[2] + " m of the hotspot " + f[0] + " " + f[1]);
+		}
 		for (int v = 0; v < m_Settings.vehicles.Count(); v++)
 		{
 			array<string> colours = new array<string>();
@@ -1153,19 +1209,13 @@ class BR_Round
 	}
 
 	// --- the map ----------------------------------------------------------------------
-	// The circles and the plane's route are drawn by the client (BR_Map.c). The one server
-	// marker is the next circle's centre, which also shows in the world.
+	// The circles and the plane's route are drawn by the client (BR_Map.c). There are no
+	// server markers any more: the "Safe zone" star at the next circle's centre, which also
+	// floated in the world, is gone. This only clears any left over.
 
 	void UpdateMarkers()
 	{
 		ClearMarkers();
-		ExpansionMarkerModule module;
-		CF_Modules<ExpansionMarkerModule>.Get(module);
-		if (!module || m_Storm || m_NextRadius <= 0 || !(m_Revealed || m_Closing))
-			return;
-		ExpansionMarkerData centre = module.CreateServerMarker("Safe zone", "Star", m_NextCenter, ARGB(255, 255, 255, 255), true);
-		if (centre)
-			m_Markers.Insert(centre.GetUID());
 	}
 
 	void ClearMarkers()

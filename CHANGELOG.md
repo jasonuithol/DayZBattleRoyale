@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3 - 2026-11-16
+
+- **Vehicles everywhere:** the 100 vehicles are spread evenly over the map instead of only at
+  Nasdara's vanilla car spots, which bunch up in the towns of the centre and west (the whole
+  east had 7 of 147). The map is cut into 1.5 km squares (`carSquare`), each getting the same
+  share: at a vanilla spot in it if there's a free one, otherwise on flat, clear, dry ground by
+  a building or out in the open. The airport and the big military base get 4 each first
+  (`carHotspots`: "x z radius count").
+- **The landing log line names the player.**
+- **No "Safe zone" marker:** the star at the next circle's centre, on the map and floating in
+  the world, is gone. The circles on the map show where to go.
+
 ## 0.2 - 2026-11-16
 
 - **Vehicles:** 100 of them, each an enduro motorbike, an Ada 4x4, an M1025 or Expansion's Land Rover

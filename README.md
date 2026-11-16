@@ -15,10 +15,14 @@ what comes later.
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
    Nasdara, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
-   items) and 100 vehicles at the vanilla car spawn points, each equally likely one of: a
+   items) and 100 vehicles spread evenly over the map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
-   which has 15% (`carFuel`). It goes out a few buildings at a time
+   which has 15% (`carFuel`). The map is cut into 1.5 km squares (`carSquare`) that each get
+   the same share of the vehicles, at a vanilla car spot in the square if it has a free one,
+   otherwise on flat, clear, dry ground by a building or out in the open; big places get a few
+   first (`carHotspots`, "x z radius count": the airport and the military base, 4 each). It
+   goes out a few buildings at a time
    over about 25 s, so the server never stalls.
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
    the same plain kit (T-shirt, jeans, trainers, a military belt with a pistol holster on it,

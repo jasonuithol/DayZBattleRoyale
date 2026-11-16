@@ -208,7 +208,10 @@ class BR_ChuteCommand: HumanCommandScript
 		if (m_Landing)
 			return;
 		m_Landing = true; // finished next frame, in PreAnimUpdate
-		Print("[BattleDayZ] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up at " + m_Player.GetPosition());
+		string who = "";
+		if (m_Player.GetIdentity())
+			who = m_Player.GetIdentity().GetName() + " ";
+		Print("[BattleDayZ] chute landing " + who + "(" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up at " + m_Player.GetPosition());
 	}
 
 	override bool PostPhysUpdate(float pDt)

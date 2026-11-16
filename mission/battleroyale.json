@@ -9,6 +9,8 @@
     "circleDrift": 0.5,
     "lootBuildings": 6000,
     "cars": 100,
+    "carSquare": 1500,
+    "carHotspots": ["11868 10702 600 4", "3477 4813 700 4"],
     "carFuel": 0.15,
     "supplyDropSeconds": 240,
     "planeSpeed": 120,
