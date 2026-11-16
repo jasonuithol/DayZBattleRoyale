@@ -38,3 +38,16 @@ class CfgMods
 		};
 	};
 };
+
+class CfgVehicles
+{
+	class HouseNoDestruct;
+
+	//! The open parachute: visual only (no geometry, so it collides with nothing), created
+	//! locally by each game above every jumper whose chute is open (BR_Chute.c)
+	class BR_Parachute: HouseNoDestruct
+	{
+		scope = 1;
+		model = "\BattleRoyale\data\parachute.p3d";
+	};
+};

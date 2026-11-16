@@ -18,6 +18,7 @@ class BR_ChuteCommand: HumanCommandScript
 	protected PlayerBase m_Player;
 	protected HumanInputController m_Input;
 	protected int m_VarStance;
+	protected bool m_Finished;
 	protected bool m_Open;
 	protected bool m_Landing;
 	protected bool m_Airborne;  // has been properly in the air: only then can it land
@@ -77,8 +78,15 @@ class BR_ChuteCommand: HumanCommandScript
 	{
 		SetHeading(m_Input.GetHeadingAngle()); // face where the camera looks
 		PreAnim_SetInt(m_VarStance, GetCurrentStance());
+
+		// landed (seen last frame in PrePhysUpdate): finish. No hands-up gesture under the chute:
+		// neither as a modifier (AddCommandModifier_Action) nor straight through the anim graph
+		// (CMD_Action) does it play during a script command.
 		if (m_Landing)
+		{
+			m_Finished = true;
 			SetFlagFinished(true);
+		}
 	}
 
 	// Everything happens here (it runs every frame): the height is steered to a target that
@@ -119,6 +127,12 @@ class BR_ChuteCommand: HumanCommandScript
 			down = CHUTE_DOWN;
 			glide = CHUTE_GLIDE;
 		}
+
+		// The server's height wins: when it corrects this game's position (a frame's head start
+		// makes the two targets drift apart by a few metres), take the corrected height as the
+		// target instead of steering back against it, which jittered up and down.
+		if (!GetGame().IsServer() && Math.AbsFloat(pos[1] - m_TargetY) > 0.5)
+			m_TargetY = pos[1];
 
 		float ground = pos[1] - agl;
 		m_TargetY = Math.Max(m_TargetY - down * pDt, ground);
@@ -166,15 +180,14 @@ class BR_ChuteCommand: HumanCommandScript
 	{
 		if (m_Landing)
 			return;
-		m_Landing = true;
-		SetFlagFinished(true);
+		m_Landing = true; // finished next frame, in PreAnimUpdate
 		Print("[BattleRoyale] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up");
 	}
 
 	override bool PostPhysUpdate(float pDt)
 	{
 		m_Post++;
-		return !m_Landing;
+		return !m_Finished;
 	}
 }
 
@@ -184,6 +197,7 @@ modded class PlayerBase
 	protected int m_BR_ChuteDoneId;  // local: the last jump this game has finished
 	protected int m_BR_ChuteOpenId;  // synced: the jump whose chute the player opened (F)
 	protected float m_BR_LoggedAt;
+	protected Object m_BR_Canopy;    // client: the parachute above this player (local, visual only)
 
 	override void Init()
 	{
@@ -237,12 +251,48 @@ modded class PlayerBase
 		return m_BR_ChuteId != m_BR_ChuteDoneId;
 	}
 
-	// the plane's camera mode for this player while they watch from it
+	// the plane's camera mode while watching from it; third person for the whole jump
 	override int CameraHandler(int pCameraMode)
 	{
-		if (BR_Plane.s_View && GetGame().GetPlayer() == this)
-			return DayZPlayerCameras.DAYZCAMERA_1ST_UNCONSCIOUS; // the plane view (BR_PlaneCamera.c)
+		if (GetGame().GetPlayer() == this)
+		{
+			if (BR_Plane.s_View)
+				return DayZPlayerCameras.DAYZCAMERA_1ST_UNCONSCIOUS; // the plane view (BR_PlaneCamera.c)
+			if (BR_IsChuting())
+				return DayZPlayerCameras.DAYZCAMERA_3RD_ERC;
+		}
 		return super.CameraHandler(pCameraMode);
+	}
+
+	// The canopy every game shows above every jumper whose chute is open (this one included):
+	// a local, visual-only object (no collision) attached to the character, so it follows and
+	// turns with them. Model: BattleRoyale/data/parachute.p3d (blender/build_parachute.py).
+	protected void BR_Canopy(bool open)
+	{
+		if (GetGame().IsDedicatedServer())
+			return;
+		if (open && !m_BR_Canopy)
+		{
+			m_BR_Canopy = GetGame().CreateObjectEx("BR_Parachute", GetPosition(), ECE_LOCAL);
+			if (m_BR_Canopy)
+			{
+				m_BR_Canopy.SetPosition(vector.Zero);
+				m_BR_Canopy.SetOrientation(vector.Zero);
+				AddChild(m_BR_Canopy, -1);
+			}
+		}
+		else if (!open && m_BR_Canopy)
+		{
+			RemoveChild(m_BR_Canopy);
+			GetGame().ObjectDeleteOnClient(m_BR_Canopy);
+			m_BR_Canopy = null;
+		}
+	}
+
+	override void EEDelete(EntityAI parent)
+	{
+		BR_Canopy(false);
+		super.EEDelete(parent);
 	}
 
 	override bool ModCommandHandlerBefore(float pDt, int pCurrentCommandID, bool pCurrentCommandFinished)
@@ -250,7 +300,10 @@ modded class PlayerBase
 		if (super.ModCommandHandlerBefore(pDt, pCurrentCommandID, pCurrentCommandFinished))
 			return true;
 		if (!BR_IsChuting() || !IsAlive())
+		{
+			BR_Canopy(false);
 			return false;
+		}
 
 		BR_ChuteCommand chute = BR_ChuteCommand.Cast(GetCommand_Script());
 		// once a second while jumping: what this game is running for the jumper
@@ -263,7 +316,11 @@ modded class PlayerBase
 		if (pCurrentCommandID == DayZPlayerConstants.COMMANDID_SCRIPT && chute)
 		{
 			if (!pCurrentCommandFinished)
+			{
+				BR_Canopy(chute.IsOpen());
 				return true; // still coming down
+			}
+			BR_Canopy(false);
 			m_BR_ChuteDoneId = m_BR_ChuteId; // landed; vanilla goes back to walking
 			BR_Landed();
 			return false;
