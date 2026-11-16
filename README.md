@@ -12,7 +12,9 @@ what comes later.
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
    people can log in, then 1 minute between rounds (`lobbySeconds`). For testing,
    `mission/battleroyale.json` currently has 30 s and 15 s. New characters are created here,
-   and so is anyone who dies. Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
+   and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
+   round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
+   diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
    Nasdara, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
    items) and 40 cars at the vanilla car spawn points. It goes out a few buildings at a time
    over about 25 s, so the server never stalls.
@@ -31,31 +33,63 @@ what comes later.
    - **F again** opens the parachute; it opens by itself 100 m above the ground otherwise.
      Under it you're upright, coming down at 6 m/s and steering at 9 m/s. Everyone sees the
      canopy above you.
+   - **The pack:** a black assault bag sits on your back from the jump until you land.
    - **Landing:** about 1.5 m up, the game's own fall takes over and lands you. Nobody can be
      hurt from the jump until 3 seconds after landing.
-4. **Game.**
-   - **The first 5 minutes:** no circle is shown and the whole map is safe. The screen counts
-     down to when the circle appears.
-   - **Then:** the white circle appears and the red one closes on it from around the whole map.
-   - **After that:** each phase the circle waits, then shrinks onto a smaller one inside it, over
-     seven phases (about 28 minutes from take-off) until the last circle closes completely.
+4. **Game.** The circle goes round the same three steps, circle after circle:
+   - **Cooldown:** nobody knows where the next circle is. At the start of a round no circle is
+     shown and the whole map is safe; after that, the circle you're in is white.
+   - **Announced:** the next circle is drawn in white and announced, and the one you're in
+     turns yellow.
+   - **Closing:** after the notification time the yellow circle turns red and closes evenly
+     onto the white one, over the next cooldown. The first time, it starts from a red circle
+     just round the whole map.
+
+   Cooldown and notification are each 5 minutes for the first circle, then 4, 3, 2, 1 and then
+   30 seconds for every circle after (`circleSeconds`). Each white circle is 70%, 65%, 60%,
+   55%, 50%, 40%, then 50% of the one before, starting at 5.6 km. One smaller than 25 m becomes
+   nothing: once the red has closed to nothing, about 35 minutes into the round, the storm is
+   everywhere and the last one alive wins.
    - **The map (M):**
      - It opens zoomed out, centred on you, or on the plane while you're on board.
-     - The current circle is drawn in red and the next one in white, as real lines over
-       Expansion's map.
+     - The circles are real lines over Expansion's map. There's only ever one white circle.
+       The red one glides as it closes.
      - The next circle's centre has a "Safe zone" marker, which you can also see in the world.
-   - **Outside the circle:** the screen turns blue (the blue sport-glasses tint, stronger) and
-     you lose health every second. The loss grows each phase: 1, 1, 2, 4, 6, 8, then 10 per second,
-     out of 100.
+   - **The compass:** Expansion's compass across the top of the screen, for everyone.
+   - **The storm (outside the circle):**
+     - **Inside it:** you get what a vanilla gas zone does to a player standing in it: gas
+       round you, the yellow tint and grain, its sound and muffled hearing.
+     - **Seeing it coming:** within 800 m of the edge you see it. Along the 1.2 km of edge
+       nearest you there's a glowing red wall, 40 m tall, with a bright line at its foot along
+       the ground. Gas clouds roll behind it. It glides in as the circle closes.
+     - **Damage:** every 3 seconds a hit, like a zombie's scratch: you flinch, grunt and see
+       red. It's scaled to take 1, 1, 2, 4, 6, 8, then 10 health a second (`circleDamage`, out
+       of 100). One hit in four also opens a bleeding cut on an arm or leg.
+     - **Patching up:** while you're busy with an action, such as bandaging, the storm takes the
+       same health without a hit, so the flinch can't cancel it. Nobody is hurt while
+       parachuting.
    - **Supply drops:** the first comes 2 minutes after the circle appears, then one every 4 minutes.
      Expansion's plane drops a crate inside the next circle.
      It flies in fast (200 m/s), so it arrives about a minute after it's sent.
      It holds top-tier armour, an M4 with an ACOG and suppressor, an SVD with a PSO, ammo and
      morphine. The crate shows on the map.
    - A player who dies or leaves is out. Notifications announce who is out and how many are left.
-5. **End.** The last player standing wins, and everyone is told. With only one player in the
-   round, it ends when that player dies. After 15 s everything the round spawned is deleted:
-   loot, cars, bodies and supply crates. Everyone goes back to the lobby.
+5. **End.** When one player is left, everyone is told who won and who was the last one out.
+   With only one player in the round, it ends when that player dies. After 15 s everything
+   the round spawned is deleted: loot, cars, bodies and supply crates. Everyone goes back to
+   the lobby, and the next round starts once its loot is out.
+
+## Testing settings
+
+Three settings in `battleroyale.json`, all off by default, shorten a test:
+
+- `testStorm`: no plane. Everyone starts on the ground 150 m outside the first white circle,
+  with the red 400 m out and closing on it over at most 60 s. Damage is on straight away.
+- `testWhiteRadius`: with `testStorm`, the first white circle's radius instead of 5.6 km. With
+  50 and `circleSeconds` of `[30]`, a round reaches the end game in about 2.5 minutes.
+- `testBots`: this many AI survivors join every round, kitted like everyone else, in the
+  middle of the first white circle. They count as players, so a round with a bot is won or
+  lost like a real one. They stand still and don't bandage.
 
 ## Loot
 
@@ -73,24 +107,26 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
 ## Layout
 
 - `BattleRoyale/`: the mod, loaded on the server and on clients.
-  - `3_Game`: the state the server sends each player every second, the jump and steering
-    messages, where the plane is, and the blue tint.
+  - `3_Game`: the state the server sends each player every second (and where the circle is
+    between updates), the jump and steering messages, and where the plane is.
   - `4_World`:
     - the jump and the parachute (`BR_Chute.c`): a script command, run identically on the
       server and every client
     - the view from the plane (`BR_PlaneCamera.c`), which borrows the unconscious camera's slot
     - a hook that lets the clean-up find supply crates (`BR_Crates.c`)
     - cars spawned with only part of a tank (`BR_CarScript.c`)
-  - `data/`: the parachute model, its textures and material. All of these are generated:
-    don't edit them by hand.
+  - `data/`: the parachute and storm wall models, their textures and materials. All of these
+    are generated: don't edit them by hand (except the `.rvmat` files).
   - `5_Mission`: the round itself (`BR_Round.c`), the plane (`BR_Flight.c`), loot, cars and
-    supply drops (`BR_Loot.c`), the settings (`BR_Settings.c`), the client HUD and F key
-    (`BR_MissionGameplay.c`), and the lines on the map (`BR_Map.c`).
+    supply drops (`BR_Loot.c`), the settings (`BR_Settings.c`), the client HUD, the storm's
+    gas and wall, and the F key (`BR_MissionGameplay.c`), and the lines on the map (`BR_Map.c`).
 - `mission/`: the `battleroyale.nasdara` mission.
   - `battleroyale.json`: the settings. Every field and its default is in `BR_Settings.c`.
   - `br_spots.json`: the loot and car spots.
   - `db/economy.xml`: switches the Central Economy off.
   - `expansion/missions/`: deliberately empty, which stops Expansion's own random airdrops.
+  - `expansion/settings/MapSettings.json`: Expansion's map settings, with the compass on for
+    everyone (`NeedCompassItemForHUDCompass` and `NeedGPSItemForHUDCompass` off).
 - `tools/make_spots.py`: rebuilds `br_spots.json` from vanilla `mapgroupproto.xml`,
   `mapgrouppos.xml`, and the car spots in DayZMissions' `roles.nasdara`.
 - The parachute, built the same way as the Molotov mod's model:
@@ -100,6 +136,10 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
   - `tools/parachute_layout.py` holds the shape, shared by both.
   - These need Blender 4.2 with the Arma 3 Object Builder add-on, Pillow, GE-Proton and
     DayZ Tools (ImageToPAA, Binarize).
+- The storm wall, the same way: `blender/build_stormwall.py` builds one 10 m × 40 m panel,
+  seen from both sides, with no collision or shadow. `tools/make_stormwall_texture.py` makes
+  its see-through texture (source in `textures/`). Its glow is in `data/stormwall.rvmat`.
+  `model.cfg` is shared, and `build_parachute.py` writes it.
 - `tools/build.sh`: stages the mod in `build/BattleRoyale`, with the model binarized.
 
 **Mods it needs:**
@@ -133,11 +173,14 @@ What the headless test checks:
 - where the next circle goes
 - the plane's route, height and flight time, and that Expansion's plane is created
 - the parachute: a test character jumps from 50 m and lands unhurt
+- the circle cycle, on simulated time, down to the storm being everywhere
+- a storm hit takes exactly the health it should
+- the storm wall's model loads
 - a supply-drop plane is sent, and a supply crate is cleaned up
 - the clean-up leaves nothing behind
 
-It can't check anything that needs a player: the HUD, the tint, F, the view from the plane,
-steering, the canopy, the lines on the map, teleporting and damage.
+It can't check anything that needs a player: the HUD, the gas, the wall, the compass, F, the
+view from the plane, steering, the canopy, the lines on the map, teleporting and the flinch.
 
 ## Known limits
 
@@ -146,5 +189,8 @@ steering, the canopy, the lines on the map, teleporting and damage.
   more than one player.
 - **No hands-up pose under the parachute:** gestures don't play while the jump controls the
   character.
+- **Test bots stand still:** they're only there to win or lose against.
+- **The storm wall is local to each player:** only the stretch near you is there, and other
+  players see their own.
 - **Diagnostic logging is still on:** the parachute logs every 2 s on every side, and the
   client logs a heartbeat every 2 s during a round.

@@ -1,5 +1,6 @@
-// Client: the two HUD lines at the top of the screen, the blue world outside the circle, and
-// F (out of the plane, then open the chute). The view and object distances are capped by
+// Client: the two HUD lines at the top of the screen, the storm outside the circle (a vanilla
+// gas zone's effects on the player, and a wall of its gas along the nearby edge so it can be
+// seen coming), and F (out of the plane, then open the chute). The view and object distances are capped by
 // FlyingWithoutCTD while on a battle royale server.
 //
 // On the plane the player watches from the plane's camera mode (BR_PlaneCamera.c) while the
@@ -10,15 +11,21 @@ modded class MissionGameplay
 	protected Widget m_BR_Root;
 	protected TextWidget m_BR_Title;
 	protected TextWidget m_BR_Subtitle;
-	protected bool m_BR_Tinted;
+	protected ref array<Particle> m_BR_Wall = new array<Particle>(); // gas along the nearby edge
+	protected ref array<Object> m_BR_Panels = new array<Object>();   // the glowing wall along it
+
+	static const float BR_WALL_NEAR = 800;     // m from the edge: closer than this, the wall shows
+	static const float BR_WALL_SPACING = 30;   // m between gas clouds along the edge
+	static const float BR_WALL_DEPTH = 50;     // m between the two rows
+	static const int BR_WALL_CLOUDS = 25;      // clouds either side of the nearest point, per row
+	static const float BR_PANEL_WIDTH = 10;    // m, the wall model's width (blender/build_stormwall.py)
+	static const int BR_PANELS = 60;           // panels either side of the nearest point (1.2 km of wall)
 	protected float m_BR_JumpAsked;
 	protected float m_BR_LeftPlaneAt;
 
 	override void OnMissionStart()
 	{
 		super.OnMissionStart();
-		if (!PPERequesterBank.GetRequester(PPERequester_BRZone))
-			PPERequesterBank.RegisterRequester(PPERequester_BRZone);
 		m_BR_Root = GetGame().GetWorkspace().CreateWidgets("BattleRoyale/gui/layouts/br_hud.layout");
 		if (m_BR_Root)
 		{
@@ -30,7 +37,8 @@ modded class MissionGameplay
 
 	override void OnMissionFinish()
 	{
-		BR_Tint(false);
+		BR_Storm(null, false);
+		BR_Wall(null, vector.Zero);
 		BR_Plane.SetView(false);
 		if (m_BR_Root)
 			m_BR_Root.Unlink();
@@ -68,7 +76,8 @@ modded class MissionGameplay
 		{
 			if (m_BR_Root)
 				m_BR_Root.Show(false);
-			BR_Tint(false);
+			BR_Storm(null, false);
+			BR_Wall(null, vector.Zero);
 			BR_Plane.SetView(false);
 			return;
 		}
@@ -78,14 +87,28 @@ modded class MissionGameplay
 		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
 		if (player && player.IsAlive() && state.phase == BR_Phase.GAME && state.inRound)
 		{
-			float by = state.OutsideBy(player.GetPosition());
+			float by = -1;
+			if (!state.wholeMap)
+			{
+				vector nowCenter;
+				float nowRadius;
+				BR_Client.CircleNow(nowCenter, nowRadius);
+				by = BR_Loot.Distance2D(player.GetPosition(), nowCenter) - nowRadius;
+			}
 			if (by > 0)
 			{
 				outside = true;
-				subtitle = "OUTSIDE THE CIRCLE - " + Math.Ceil(by).ToString() + " m to safety | " + subtitle;
+				if (state.radius > 0)
+					subtitle = "IN THE STORM - " + Math.Ceil(by).ToString() + " m to safety | " + subtitle;
+				else
+					subtitle = "IN THE STORM | " + subtitle;
 			}
 		}
-		BR_Tint(outside);
+		BR_Storm(player, outside);
+		if (player && player.IsAlive() && state.phase == BR_Phase.GAME && !state.wholeMap)
+			BR_Wall(state, player.GetPosition());
+		else
+			BR_Wall(null, vector.Zero);
 		if (player && player.IsAlive() && player.BR_IsChuting())
 			BR_Steer.Update();
 		bool falling = player && player.IsAlive() && player.BR_InFreeFall();
@@ -125,7 +148,7 @@ modded class MissionGameplay
 			m_BR_Title.SetText(state.title);
 			m_BR_Subtitle.SetText(subtitle);
 			if (outside)
-				m_BR_Subtitle.SetColor(ARGB(255, 120, 170, 255));
+				m_BR_Subtitle.SetColor(ARGB(255, 240, 190, 110));
 			else
 				m_BR_Subtitle.SetColor(ARGB(255, 255, 255, 255));
 		}
@@ -159,17 +182,128 @@ modded class MissionGameplay
 		return super.FW_WhyFlying(ride);
 	}
 
-	protected void BR_Tint(bool on)
+	// In the storm: everything a vanilla gas zone does to a player standing in it (the gas round
+	// them, the yellow tint and grain, the ambient sound, muffled hearing), switched on and off here
+	// rather than by a zone's trigger
+	protected PlayerBase m_BR_GasOn;
+	protected void BR_Storm(PlayerBase player, bool on)
 	{
-		if (on == m_BR_Tinted)
-			return;
-		PPERequesterBase req = PPERequesterBank.GetRequester(PPERequester_BRZone);
-		if (!req)
-			return;
-		if (on)
-			req.Start();
-		else
-			req.Stop();
-		m_BR_Tinted = on;
+		if (m_BR_GasOn && (!on || m_BR_GasOn != player))
+		{
+			m_BR_GasOn.SetContaminatedEffectEx(false, PPERequesterBank.REQ_CONTAMINATEDAREA);
+			m_BR_GasOn = null;
+		}
+		if (on && player && !m_BR_GasOn)
+		{
+			player.SetContaminatedEffectEx(true, PPERequesterBank.REQ_CONTAMINATEDAREA, ParticleList.CONTAMINATED_AREA_GAS_AROUND, ParticleList.CONTAMINATED_AREA_GAS_TINY, "ContaminatedArea_SoundSet");
+			m_BR_GasOn = player;
+		}
+	}
+
+	// the storm's edge along the stretch nearest the player, so it can be seen coming from
+	// inside: the glowing wall (a panel every BR_PANEL_WIDTH m) and a gas zone's big clouds
+	// behind it in two rows, on the edge and BR_WALL_DEPTH m out, every BR_WALL_SPACING m. Moved
+	// every frame with the closing circle. Each panel and cloud has a fixed place round the
+	// circle (they're all alike, so which one fills a place doesn't show): walking along the
+	// edge doesn't slide them. Gone when the player is far from the edge (state null: clear it)
+	protected void BR_Wall(BR_State state, vector pos)
+	{
+		array<vector> spots = new array<vector>();
+		array<vector> panels = new array<vector>();   // pairs: where, and which way it faces
+		vector c;
+		float radius;
+		if (state)
+			BR_Client.CircleNow(c, radius);
+		if (state && radius > 0)
+		{
+			float dx = pos[0] - c[0];
+			float dz = pos[2] - c[2];
+			float dist = Math.Sqrt(dx * dx + dz * dz);
+			if (Math.AbsFloat(dist - radius) < BR_WALL_NEAR)
+			{
+				float a0 = Math.Atan2(dz, dx);
+				float step = BR_WALL_SPACING / radius;
+				int n = Math.Min(BR_WALL_CLOUDS, Math.Floor(Math.PI / step));
+				// the glowing wall, one panel every BR_PANEL_WIDTH m, standing on the lower of
+				// its two ends (the bright line along its foot is the circle on the ground)
+				float pstep = BR_PANEL_WIDTH / radius;
+				int pn = Math.Min(BR_PANELS, Math.Floor(Math.PI / pstep));
+				float pbase = Math.Round(a0 / pstep) * pstep;
+				for (int q = -pn; q <= pn; q++)
+				{
+					float pa = pbase + q * pstep;
+					vector radial = Vector(Math.Cos(pa), 0, Math.Sin(pa));
+					vector mid = c + radial * radius;
+					vector along = Vector(-radial[2], 0, radial[0]) * (BR_PANEL_WIDTH / 2);
+					vector e1 = mid + along;
+					vector e2 = mid - along;
+					mid[1] = Math.Min(GetGame().SurfaceY(e1[0], e1[2]), GetGame().SurfaceY(e2[0], e2[2])) - 0.2;
+					panels.Insert(mid);
+					panels.Insert(radial);
+				}
+				float base = Math.Round(a0 / step) * step;
+				for (int row = 0; row < 2; row++)
+				{
+					float r = radius + row * BR_WALL_DEPTH;
+					float shift = row * step / 2; // the second row fills the first's gaps
+					for (int k = -n; k <= n; k++)
+					{
+						float a = base + k * step + shift;
+						float x = c[0] + Math.Cos(a) * r;
+						float z = c[2] + Math.Sin(a) * r;
+						spots.Insert(Vector(x, GetGame().SurfaceY(x, z), z));
+					}
+				}
+			}
+		}
+
+		// reuse the clouds already playing, add or stop the rest
+		for (int i = 0; i < spots.Count(); i++)
+		{
+			if (i < m_BR_Wall.Count() && m_BR_Wall[i])
+				m_BR_Wall[i].SetPosition(spots[i]);
+			else
+			{
+				Particle p = Particle.PlayInWorld(ParticleList.CONTAMINATED_AREA_GAS_BIGASS, spots[i]);
+				if (i < m_BR_Wall.Count())
+					m_BR_Wall[i] = p;
+				else
+					m_BR_Wall.Insert(p);
+			}
+		}
+		for (int j = m_BR_Wall.Count() - 1; j >= spots.Count(); j--)
+		{
+			if (m_BR_Wall[j])
+				m_BR_Wall[j].Stop();
+			m_BR_Wall.Remove(j);
+		}
+
+		// the same for the wall's panels (local objects: only this game has them)
+		int want = panels.Count() / 2;
+		for (int w = 0; w < want; w++)
+		{
+			Object panel;
+			if (w < m_BR_Panels.Count())
+				panel = m_BR_Panels[w];
+			if (!panel)
+			{
+				panel = GetGame().CreateObjectEx("BR_StormWall", panels[w * 2], ECE_LOCAL);
+				if (w < m_BR_Panels.Count())
+					m_BR_Panels[w] = panel;
+				else
+					m_BR_Panels.Insert(panel);
+			}
+			if (panel)
+			{
+				panel.SetPosition(panels[w * 2]);
+				panel.SetDirection(panels[w * 2 + 1]);
+			}
+		}
+		for (int g = m_BR_Panels.Count() - 1; g >= want; g--)
+		{
+			if (m_BR_Panels[g])
+				GetGame().ObjectDeleteOnClient(m_BR_Panels[g]);
+			m_BR_Panels.Remove(g);
+		}
 	}
 }

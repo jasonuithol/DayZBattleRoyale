@@ -46,6 +46,9 @@ smoke or flare marker so players can find it. Two ways to build it:
 
 ## The circle on Nasdara: the sandstorm
 
+*Superseded (2026-11-16): the storm is a gas zone after all. See the decisions at the end.
+This section is kept for what it found about the vanilla sandstorm.*
+
 ### What the vanilla sandstorm is
 
 Vanilla scripts checked 2026-11-15:
@@ -135,3 +138,30 @@ screen effect and sickness.
   - The route runs edge to edge.
   - Free fall at 22.5 m/s, half a real skydiver's, for more time to pick a spot.
 - **View distance:** capped all session through FlyingWithoutCTD.
+
+## Decisions (2026-11-16, later)
+
+- **The circle cycle.** Three steps, repeating:
+  - a cooldown, with the next circle unknown
+  - the next circle announced in white, with the current one turning yellow
+  - after the notification time, the yellow turns red and closes on the white one
+  Cooldown and notification shrink from 5 minutes by a minute each circle, then stay at 30 s
+  until the circle closes to nothing. There's only ever one white circle on the map.
+- **The storm is a gas zone, not a sandstorm.** The vanilla sandstorm screen effect was too
+  tame, even pushed hard with an overlay, vignette and blur. The player gets a vanilla gas
+  zone's own effects instead (`PlayerBase.SetContaminatedEffectEx`: gas round them, the tint,
+  the sound, muffled hearing), switched on by the client from its distance to the circle.
+  There's no zone and no trigger. It looks the same on every map, so the "other maps could be
+  gas" idea is now the default.
+- **Seeing the storm coming:** our own model, a see-through glowing red wall with a bright
+  line along the ground, placed client-side in 10 m panels along the stretch of edge nearest
+  the player. The gas zone's big clouds sit behind it. The client works out where the circle
+  is every frame, from the last state and how long the red has left to close, so the wall
+  glides.
+- **Storm damage is real hits:** a zombie scratch to the torso every 3 s, scaled to the
+  circle's damage per second, so players flinch, grunt and see red. One in four also opens a
+  bleeding cut. No hit (only the same health taken) while the player is doing an action, so
+  the flinch can't stop them bandaging.
+- **The lobby resets everyone** on arrival: plain kit, full health.
+- **Testing:** settings to start in the storm, shrink the first circle, and add AI bots that
+  count as players. With them, the end of a round can be tested solo in a few minutes.

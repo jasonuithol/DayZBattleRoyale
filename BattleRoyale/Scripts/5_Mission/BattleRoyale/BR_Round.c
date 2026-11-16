@@ -20,6 +20,10 @@ class BR_Round
 	static const float LOBBY_LEASH = 30;   // lobby players further than this from it are brought back
 	static const int LOOT_STEP_MS = 100;   // the lobby puts out loot this often...
 	static const int LOOT_PER_STEP = 30;   // ...in this many buildings (6000 take about 20 s)
+	static const float STORM_HIT_SECONDS = 3;     // the storm cuts this often
+	static const string STORM_AMMO = "MeleeZombie"; // a zombie scratch: 5 health, 10 shock, no cut of its own
+	static const float STORM_AMMO_HEALTH = 5;
+	static const int STORM_CUT_ONE_IN = 4;         // a bleeding cut on one storm hit in this many
 
 	protected static ref BR_Round s_Instance;
 
@@ -45,12 +49,19 @@ class BR_Round
 	protected float m_FromRadius;
 	protected vector m_NextCenter;
 	protected float m_NextRadius;
-	protected int m_Stage;        // index into the settings' phases; Count() once the last one is done
-	protected bool m_Shrinking;
-	protected bool m_WholeMap;    // from take-off until the first shrink: the whole map is safe
+	// the circle (see BR_Settings.circleSeconds): cooldown -> reveal -> notification -> close,
+	// the closing running through the next circle's cooldown
+	protected int m_Circle;       // which circle: 0 the first
+	protected bool m_WholeMap;    // from take-off until the first closing: the whole map is safe
+	protected bool m_Revealed;    // the next (white) circle is on the map, about to close in on
+	protected bool m_Closing;     // the red circle is closing on the white one
+	protected bool m_Storm;       // the last circle has closed to nothing: everyone is in the storm
 	protected float m_StageStarted;
 	protected float m_StageEnds;
 	protected float m_NextDrop;
+	protected float m_NextStormHit;
+	protected string m_LastOut;
+	protected ref map<string, PlayerBase> m_LobbyReset = new map<string, PlayerBase>(); // player id -> the character last reset in the lobby     // the name of whoever was knocked out last
 	protected ref array<string> m_Markers = new array<string>();
 
 	// the plane, while it's crossing the map, and who's still on it
@@ -114,7 +125,7 @@ class BR_Round
 		string test;
 		if (!GetGame().CommandlineGetParam("missiontest", test))
 			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(PrepareRound, 30000, false);
-		Print("[BattleRoyale] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.phases.Count() + " circle phases, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
+		Print("[BattleRoyale] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(Tick, 1000, true);
 	}
@@ -144,6 +155,8 @@ class BR_Round
 			PlayerBase player = PlayerBase.Cast(men[i]);
 			if (!player || !player.IsAlive() || !player.GetIdentity())
 				continue;
+			if (!InRound(player))
+				ResetInLobby(player);
 			if (!InRound(player) || InPlane(player))
 				KeepInLobby(player);
 		}
@@ -191,6 +204,19 @@ class BR_Round
 				lobby.Insert(player);
 		}
 		return lobby;
+	}
+
+	// arriving in the lobby (back from a round, or a new or respawned character): the kit at full
+	// health, once per arrival
+	void ResetInLobby(PlayerBase player)
+	{
+		string id = player.GetIdentity().GetId();
+		PlayerBase done;
+		if (m_LobbyReset.Find(id, done) && done == player)
+			return;
+		BR_Loot.Kit(player);
+		m_LobbyReset.Set(id, player);
+		Print("[BattleRoyale] " + player.GetIdentity().GetName() + " reset in the lobby");
 	}
 
 	void KeepInLobby(PlayerBase player)
@@ -310,9 +336,12 @@ class BR_Round
 		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
 		GetGame().GetWorld().SetDate(year, month, day, 12, 0);
 
-		m_Flight = BR_Flight.Plan(m_Center, m_Radius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
-		m_Flight.TakeOff(Now());
-		BR_Plane.Set(m_Flight.PositionAt(Now()), m_Flight.Velocity());
+		if (!m_Settings.testStorm)
+		{
+			m_Flight = BR_Flight.Plan(m_Center, m_Radius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
+			m_Flight.TakeOff(Now());
+			BR_Plane.Set(m_Flight.PositionAt(Now()), m_Flight.Velocity());
+		}
 
 		// everyone in the lobby onto the plane
 		array<PlayerBase> players = LobbyPlayers(men);
@@ -326,23 +355,88 @@ class BR_Round
 			string id = player.GetIdentity().GetId();
 			m_Alive.Set(id, player);
 			m_Names.Set(id, player.GetIdentity().GetName());
+			m_LobbyReset.Remove(id); // reset again on coming back
 			m_InPlane.Set(id, player);
 		}
 		m_Started = players.Count();
 		m_Winner = "";
+		m_LastOut = "";
 
-		m_Stage = 0;
-		m_Shrinking = false;
-		BR_ZonePhase phase = m_Settings.phases[0];
-		PickNext(phase.radiusFraction);  // the white circle, from the start radius
-		m_WholeMap = true;               // ...but no circles shown (or damage) until the first shrink
-		m_StageEnds = Now() + phase.waitSeconds;
+		// the first cooldown: no circle shown and the whole map safe (m_Center and m_Radius, the
+		// start circle, are only where the first white circle is picked from)
+		m_Circle = 0;
+		m_WholeMap = true;
+		m_Revealed = false;
+		m_Closing = false;
+		m_Storm = false;
+		m_NextRadius = m_Radius;
+		m_NextCenter = m_Center;
+		m_StageEnds = Now() + m_Settings.CircleSeconds(0);
 		m_NextDrop = m_StageEnds + m_Settings.supplyDropSeconds / 2; // not before the circle shows
-		UpdateMarkers();
 		m_Phase = BR_Phase.GAME;
+		if (m_Settings.testStorm)
+		{
+			TestStormStart(players);
+			AddBots();
+			UpdateMarkers();
+			return;
+		}
+		AddBots();
+		UpdateMarkers();
 
 		Print("[BattleRoyale] round " + m_Round + " started: " + m_Started + " players, circle " + m_Center + " r " + m_Radius + ", plane " + m_Flight.from + " -> " + m_Flight.to + " (" + m_Flight.length + " m at " + m_Flight.altitude + " m, " + m_Flight.Duration() + " s)");
 		Announce("Round " + m_Round + ": the plane is taking off", "Its route is on the map (M). Press F to jump.");
+	}
+
+	// testStorm: straight to the first red circle closing, with everyone on the ground
+	// TEST_STORM_OUTSIDE m outside the white circle and the red TEST_STORM_RED m out, closing
+	// on the white over TEST_STORM_SECONDS (it reaches them after about 35 s)
+	static const float TEST_STORM_OUTSIDE = 150;
+	static const float TEST_STORM_RED = 400;
+	static const float TEST_STORM_SECONDS = 60; // at most
+	void TestStormStart(array<PlayerBase> players)
+	{
+		float now = Now();
+		PickNext(m_Settings.CircleFraction(0));
+		if (m_Settings.testWhiteRadius > 0)
+			m_NextRadius = m_Settings.testWhiteRadius;
+
+		// a spot outside the white circle that's on the map and not in the sea
+		float size = GetGame().GetWorld().GetWorldSize();
+		float d = m_NextRadius + TEST_STORM_OUTSIDE;
+		vector spot = m_NextCenter;
+		for (int t = 0; t < 100; t++)
+		{
+			float a = Math.RandomFloat(0, Math.PI2);
+			float x = m_NextCenter[0] + Math.Cos(a) * d;
+			float z = m_NextCenter[2] + Math.Sin(a) * d;
+			if (x < 200 || z < 200 || x > size - 200 || z > size - 200 || GetGame().SurfaceIsSea(x, z) || GetGame().SurfaceIsPond(x, z))
+				continue;
+			spot = Vector(x, GetGame().SurfaceY(x, z), z);
+			break;
+		}
+
+		m_InPlane.Clear();
+		for (int i = 0; i < players.Count(); i++)
+		{
+			vector pos = spot + Vector(Math.RandomFloat(-5, 5), 0, Math.RandomFloat(-5, 5));
+			pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
+			players[i].SetPosition(pos);
+			players[i].SetAllowDamage(true); // the lobby's protection, which landing would end otherwise
+		}
+
+		m_WholeMap = false;
+		m_Revealed = false;
+		m_Closing = true;
+		m_Circle = 1;
+		m_FromCenter = m_NextCenter;
+		m_FromRadius = m_NextRadius + TEST_STORM_RED;
+		m_Center = m_FromCenter;
+		m_Radius = m_FromRadius;
+		m_StageStarted = now;
+		m_StageEnds = now + Math.Min(TEST_STORM_SECONDS, m_Settings.CircleSeconds(1));
+		Print("[BattleRoyale] round " + m_Round + " started (testStorm): " + m_Started + " players at " + spot + ", white r " + m_NextRadius + " at " + m_NextCenter + ", red r " + m_Radius + " closing over " + (m_StageEnds - now) + " s");
+		Announce("Round " + m_Round + " (storm test)", "The storm is coming: get inside the white circle on the map.");
 	}
 
 	// from the plane, a little spread out so a crowd doesn't land in one heap: where the
@@ -409,15 +503,17 @@ class BR_Round
 		for (int i = m_Alive.Count() - 1; i >= 0; i--)
 		{
 			PlayerBase player = m_Alive.GetElement(i);
-			if (player && player.IsAlive() && player.GetIdentity())
-				continue;
 			string id = m_Alive.GetKey(i);
+			if (player && player.IsAlive() && (player.GetIdentity() || IsBot(id)))
+				continue;
 			m_Alive.RemoveElement(i);
 			m_InPlane.Remove(id);
-			if (player && !player.IsAlive())
+			if (player && !player.IsAlive() && m_Spawned.Find(player) < 0)
 				m_Spawned.Insert(player); // the body goes with the round
+			m_LastOut = m_Names.Get(id);
+			Print("[BattleRoyale] " + m_LastOut + " is out, " + m_Alive.Count() + " left");
 			if (m_Alive.Count() > 1)
-				Announce(m_Names.Get(id) + " is out", m_Alive.Count().ToString() + " left.");
+				Announce(m_LastOut + " is out", m_Alive.Count().ToString() + " left.");
 		}
 
 		if ((m_Started >= 2 && m_Alive.Count() <= 1) || m_Alive.Count() == 0)
@@ -429,18 +525,23 @@ class BR_Round
 		UpdateFlight(now);
 		UpdateZone(now);
 
-		int stage = Math.Min(m_Stage, m_Settings.phases.Count() - 1);
-		float damage = m_Settings.phases[stage].damagePerSecond;
-		for (int a = 0; a < m_Alive.Count(); a++)
+		// the storm cuts: a real hit every STORM_HIT_SECONDS (the player flinches, grunts, sees the
+		// red splatter and may start bleeding), scaled so it takes circleDamage health a second
+		if (now >= m_NextStormHit)
 		{
-			PlayerBase p = m_Alive.GetElement(a);
-			if (InPlane(p) || m_WholeMap)
-				continue;
-			if (BR_Loot.Distance2D(p.GetPosition(), m_Center) > m_Radius)
-				p.DecreaseHealth("", "", damage);
+			m_NextStormHit = now + STORM_HIT_SECONDS;
+			float perHit = m_Settings.CircleDamage(m_Circle) * STORM_HIT_SECONDS;
+			for (int a = 0; a < m_Alive.Count(); a++)
+			{
+				PlayerBase p = m_Alive.GetElement(a);
+				if (InPlane(p) || m_WholeMap || p.BR_IsChuting())
+					continue;
+				if (BR_Loot.Distance2D(p.GetPosition(), m_Center) > m_Radius)
+					StormCut(p, perHit);
+			}
 		}
 
-		if (m_Settings.supplyDropSeconds > 0 && now >= m_NextDrop && m_NextRadius > 50)
+		if (m_Settings.supplyDropSeconds > 0 && now >= m_NextDrop && m_NextRadius > 50 && !m_Storm)
 		{
 			m_NextDrop = now + m_Settings.supplyDropSeconds;
 			float angle = Math.RandomFloat(0, Math.PI2);
@@ -456,48 +557,120 @@ class BR_Round
 
 	void UpdateZone(float now)
 	{
-		if (m_Stage >= m_Settings.phases.Count())
-			return; // the last circle has closed
-		BR_ZonePhase phase = m_Settings.phases[m_Stage];
+		if (m_Storm)
+			return;
 
-		if (!m_Shrinking)
+		// the red circle closing on the white one
+		if (m_Closing)
 		{
-			if (now < m_StageEnds)
-				return;
-			m_Shrinking = true;
-			m_FromCenter = m_Center;
-			m_FromRadius = m_Radius;
-			if (m_WholeMap)
+			float f = Math.Clamp((now - m_StageStarted) / Math.Max(m_StageEnds - m_StageStarted, 1), 0, 1);
+			m_Center = m_FromCenter + (m_NextCenter - m_FromCenter) * f;
+			m_Radius = m_FromRadius + (m_NextRadius - m_FromRadius) * f;
+		}
+		if (now < m_StageEnds)
+			return;
+
+		if (!m_Revealed)
+		{
+			// the end of a cooldown: the red has reached the white circle (if it was closing)...
+			if (m_Closing)
 			{
-				// the first shrink starts from around the whole map: a circle through its
-				// farthest corner
-				m_WholeMap = false;
-				m_FromRadius = WholeMapRadius(m_Center);
-				UpdateMarkers(); // the safe zone marker shows from now
+				m_Closing = false;
+				m_Center = m_NextCenter;
+				m_Radius = m_NextRadius;
+				if (m_Radius <= 0)
+				{
+					m_Storm = true;
+					Print("[BattleRoyale] circle " + m_Circle + ": closed to nothing, the storm is everywhere");
+					UpdateMarkers();
+					Announce("The storm is everywhere", "Last one standing wins.");
+					return;
+				}
 			}
+			// ...and the next white circle is revealed
+			PickNext(m_Settings.CircleFraction(m_Circle));
+			if (m_NextRadius < m_Settings.circleMinRadius)
+			{
+				m_NextRadius = 0;
+				m_NextCenter = m_Center;
+			}
+			m_Revealed = true;
 			m_StageStarted = now;
-			m_StageEnds = now + phase.shrinkSeconds;
-			Announce("The circle is closing", "Get inside the white circle on the map.");
+			m_StageEnds = now + m_Settings.CircleSeconds(m_Circle);
+			Print("[BattleRoyale] circle " + m_Circle + ": white circle revealed at " + m_NextCenter + " r " + m_NextRadius + ", closes in " + m_Settings.CircleSeconds(m_Circle) + " s");
+			UpdateMarkers();
+			if (m_NextRadius > 0)
+				Announce("The next circle is on the map", "It starts closing in " + Clock(m_StageEnds - now) + ".");
+			else
+				Announce("The last circle", "In " + Clock(m_StageEnds - now) + " it closes to nothing.");
 			return;
 		}
 
-		float f = 1;
-		if (phase.shrinkSeconds > 0)
-			f = Math.Clamp((now - m_StageStarted) / phase.shrinkSeconds, 0, 1);
-		m_Center = m_FromCenter + (m_NextCenter - m_FromCenter) * f;
-		m_Radius = m_FromRadius + (m_NextRadius - m_FromRadius) * f;
-		if (f < 1)
-			return;
-
-		m_Shrinking = false;
-		m_Stage++;
-		if (m_Stage < m_Settings.phases.Count())
+		// the end of the notification: the old white circle turns red and closes on the new one,
+		// over the next circle's cooldown. The first time it starts from just round the map.
+		m_Revealed = false;
+		m_Closing = true;
+		m_FromCenter = m_Center;
+		m_FromRadius = m_Radius;
+		if (m_WholeMap)
 		{
-			BR_ZonePhase next = m_Settings.phases[m_Stage];
-			PickNext(next.radiusFraction);
-			m_StageEnds = now + next.waitSeconds;
+			m_WholeMap = false;
+			m_FromRadius = WholeMapRadius(m_Center);
+			m_Radius = m_FromRadius;
 		}
-		UpdateMarkers();
+		m_Circle++;
+		m_StageStarted = now;
+		m_StageEnds = now + m_Settings.CircleSeconds(m_Circle);
+		Print("[BattleRoyale] circle " + m_Circle + ": red closing from r " + m_FromRadius + " to r " + m_NextRadius + " over " + m_Settings.CircleSeconds(m_Circle) + " s");
+		Announce("The circle is closing", "Get inside the white circle on the map.");
+	}
+
+	// testBots: AI survivors in the round as players, kitted like everyone else, standing near
+	// the middle of the next circle (or the first circle with the plane). They're in the round's
+	// roster under "bot:N" ids and go with the round's clean-up.
+	static const string BOT_ID = "bot:";
+	void AddBots()
+	{
+		for (int b = 1; b <= m_Settings.testBots; b++)
+		{
+			vector c = m_NextCenter;
+			float x = c[0] + Math.RandomFloat(-10, 10);
+			float z = c[2] + Math.RandomFloat(-10, 10);
+			PlayerBase bot = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Boris", Vector(x, GetGame().SurfaceY(x, z), z), false, true));
+			if (!bot)
+				continue;
+			BR_Loot.Kit(bot);
+			bot.SetAllowDamage(true);
+			m_Spawned.Insert(bot);
+			string id = BOT_ID + b;
+			m_Alive.Set(id, bot);
+			m_Names.Set(id, "Bot " + b);
+			m_Started++;
+			Print("[BattleRoyale] Bot " + b + " joins the round at " + bot.GetPosition());
+		}
+	}
+
+	static bool IsBot(string id)
+	{
+		return id.IndexOf(BOT_ID) == 0;
+	}
+
+	// one storm hit, taking exactly this much health: a scratch to the torso, scaled (limb hits
+	// pass only a fraction on to health). It brings the flinch, grunt and red splatter; one hit in
+	// STORM_CUT_ONE_IN also opens a bleeding cut on an arm or leg.
+	// While the player is busy with an action (bandaging above all) there's no hit, only the same
+	// health taken: a hit's flinch would cancel the action, and nobody could patch themselves up.
+	void StormCut(PlayerBase player, float health)
+	{
+		if (player.GetActionManager() && player.GetActionManager().GetRunningAction())
+			player.DecreaseHealth("", "", health);
+		else
+			player.ProcessDirectDamage(DamageType.CLOSE_COMBAT, player, "Torso", STORM_AMMO, "0 0 0", health / STORM_AMMO_HEALTH);
+		if (Math.RandomInt(0, STORM_CUT_ONE_IN) == 0 && player.GetBleedingManagerServer())
+		{
+			array<string> limbs = {"LeftForeArm", "RightForeArm", "LeftArm", "RightArm", "LeftLeg", "RightLeg", "LeftUpLeg", "RightUpLeg"};
+			player.GetBleedingManagerServer().AttemptAddBleedingSourceBySelection(limbs.GetRandomElement());
+		}
 	}
 
 	// the circle round the whole map from here: through its farthest corner
@@ -535,7 +708,10 @@ class BR_Round
 		if (m_Alive.Count() == 1)
 		{
 			m_Winner = m_Names.Get(m_Alive.GetKey(0));
-			Announce(m_Winner + " wins!", "Round " + m_Round + " is over.");
+			if (m_Started >= 2 && m_LastOut != "")
+				Announce(m_Winner + " wins!", m_LastOut + " was the last one out. Round " + m_Round + " is over.");
+			else
+				Announce(m_Winner + " wins!", "Round " + m_Round + " is over.");
 		}
 		else
 		{
@@ -603,14 +779,14 @@ class BR_Round
 		}
 		else if (m_Phase == BR_Phase.GAME)
 		{
-			if (m_WholeMap)
-				title = "The circle appears in " + Clock(m_StageEnds - now);
-			else if (m_Stage >= m_Settings.phases.Count())
-				title = "Final circle";
-			else if (m_Shrinking)
+			if (m_Storm)
+				title = "The storm: last one standing wins";
+			else if (m_Closing)
 				title = "Circle closing: " + Clock(m_StageEnds - now);
-			else
+			else if (m_Revealed)
 				title = "Circle closes in " + Clock(m_StageEnds - now);
+			else
+				title = "The circle appears in " + Clock(m_StageEnds - now);
 			subtitle = m_Alive.Count().ToString() + " alive";
 		}
 		else
@@ -625,9 +801,13 @@ class BR_Round
 		BR_State state = new BR_State();
 		state.phase = m_Phase;
 		state.wholeMap = m_Phase == BR_Phase.GAME && m_WholeMap;
+		state.closing = m_Phase == BR_Phase.GAME && m_Closing;
 		state.center = m_Center;
 		state.radius = m_Radius;
-		state.hasNext = m_Phase == BR_Phase.GAME && m_Stage < m_Settings.phases.Count() && !m_WholeMap;
+		state.closeLeft = 0;
+		if (m_Closing)
+			state.closeLeft = Math.Max(m_StageEnds - now, 0);
+		state.hasNext = m_Phase == BR_Phase.GAME && (m_Revealed || m_Closing) && !m_Storm;
 		state.nextCenter = m_NextCenter;
 		state.nextRadius = m_NextRadius;
 		state.flying = m_Phase == BR_Phase.GAME && m_Flight != null;
@@ -665,7 +845,7 @@ class BR_Round
 
 	void SelfTest()
 	{
-		Print("[BRTest] " + m_Spots.protos.Count() + " building types, " + m_Spots.buildings.Count() + " buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.phases.Count() + " phases, lobby " + m_Lobby);
+		Print("[BRTest] " + m_Spots.protos.Count() + " building types, " + m_Spots.buildings.Count() + " buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, lobby " + m_Lobby);
 		array<string> types = BR_Loot.AllTypes();
 		int missing = 0;
 		for (int t = 0; t < types.Count(); t++)
@@ -722,8 +902,12 @@ class BR_Round
 
 		PickNext(0.5);
 		Print("[BRTest] next circle " + m_NextCenter + " r " + m_NextRadius + ", " + BR_Loot.Distance2D(m_NextCenter, m_Center) + " m from the centre (max " + (m_Radius - m_NextRadius) + ")");
+		m_Revealed = true;
 		UpdateMarkers();
 		Print("[BRTest] " + m_Markers.Count() + " map markers");
+		m_Revealed = false;
+		SelfTestCircles();
+		SelfTestHits();
 
 		// the plane over the whole-map circle
 		vector mapCenter = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
@@ -745,6 +929,77 @@ class BR_Round
 		// a plane takes over a minute to drop, longer than the test: put a crate down directly
 		Object crate = GetGame().CreateObjectEx("ExpansionAirdropContainer_Military", LobbySpot(), ECE_PLACE_ON_SURFACE);
 		Print("[BRTest] test crate " + crate + ", crates tracked: " + ExpansionAirdropContainerBase.s_BR_Crates.Count());
+	}
+
+	// the whole circle sequence on simulated time, with the configured fractions but short
+	// timings (10, 8, 6, 4, 2, then 1 s): each step logs a "circle N:" line; it must end in the storm
+	void SelfTestCircles()
+	{
+		array<int> real = m_Settings.circleSeconds;
+		array<int> quick = {10, 8, 6, 4, 2, 1};
+		m_Settings.circleSeconds = quick;
+		vector center = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
+		m_Center = center;
+		m_Radius = m_Settings.startRadius;
+		m_Circle = 0;
+		m_WholeMap = true;
+		m_Revealed = false;
+		m_Closing = false;
+		m_Storm = false;
+		m_StageEnds = m_Settings.CircleSeconds(0);
+		float t = 0;
+		while (t < 600 && !m_Storm)
+		{
+			t += 0.5;
+			UpdateZone(t);
+		}
+		Print("[BRTest] circles: storm " + m_Storm + " after " + t + " simulated s, " + m_Circle + " circles, radius " + m_Radius);
+		m_Settings.circleSeconds = real;
+		m_Storm = false;
+		m_WholeMap = false;
+		m_Closing = false;
+		m_Revealed = false;
+		ClearMarkers();
+	}
+
+	// what a hit of each candidate kind does to a fresh character (for the storm's cuts)
+	void SelfTestHits()
+	{
+		array<string> ammo = {"MeleeZombie", "MeleeKnife", "TripWireHit", "MeleeWolf"};
+		for (int i = 0; i < ammo.Count(); i++)
+		{
+			PlayerBase body = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Mirek", LobbySpot() + Vector(i * 3, 0, 0), false, true));
+			if (!body)
+				continue;
+			m_Spawned.Insert(body);
+			float hp = body.GetHealth("", "");
+			float blood = body.GetHealth("", "Blood");
+			float shock = body.GetHealth("", "Shock");
+			body.ProcessDirectDamage(DamageType.CLOSE_COMBAT, body, "Torso", ammo[i], "0 0 0", 1);
+			int bleeds = 0;
+			if (body.GetBleedingManagerServer())
+				bleeds = body.GetBleedingManagerServer().GetBleedingSourcesCount();
+			Print("[BRTest] hit " + ammo[i] + ": health " + hp + " -> " + body.GetHealth("", "") + ", blood " + blood + " -> " + body.GetHealth("", "Blood") + ", shock " + shock + " -> " + body.GetHealth("", "Shock") + ", cuts " + bleeds);
+		}
+		// the storm wall's model (the client puts rows of them along the edge)
+		Object panel = GetGame().CreateObjectEx("BR_StormWall", LobbySpot() + "0 0 12", ECE_NONE);
+		if (panel)
+		{
+			vector box[2];
+			panel.ClippingInfo(box);
+			Print("[BRTest] storm wall panel: created, bounds " + box[0] + " .. " + box[1]);
+			GetGame().ObjectDelete(panel);
+		}
+		else
+			Print("[BRTest] storm wall panel: NOT created");
+		// the storm's own cut, at the first circle's damage (1 a second, 3 per hit)
+		PlayerBase cut = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Mirek", LobbySpot() + "0 0 6", false, true));
+		if (cut)
+		{
+			m_Spawned.Insert(cut);
+			StormCut(cut, 3);
+			Print("[BRTest] storm cut (3): health 100 -> " + cut.GetHealth("", "") + ", shock 100 -> " + cut.GetHealth("", "Shock") + ", cuts " + cut.GetBleedingManagerServer().GetBleedingSourcesCount());
+		}
 	}
 
 	void SelfTestFinish()
@@ -796,7 +1051,7 @@ class BR_Round
 		ClearMarkers();
 		ExpansionMarkerModule module;
 		CF_Modules<ExpansionMarkerModule>.Get(module);
-		if (!module || m_Stage >= m_Settings.phases.Count() || m_WholeMap)
+		if (!module || m_Storm || m_NextRadius <= 0 || !(m_Revealed || m_Closing))
 			return;
 		ExpansionMarkerData centre = module.CreateServerMarker("Safe zone", "Star", m_NextCenter, ARGB(255, 255, 255, 255), true);
 		if (centre)

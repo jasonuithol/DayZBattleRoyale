@@ -1,22 +1,6 @@
 // battleroyale.json in the mission folder. Anything missing from the file keeps the
 // default below; with no file at all the defaults are used as they are.
 
-class BR_ZonePhase
-{
-	int waitSeconds;       // the circle sits still (the next one is already on the map)
-	int shrinkSeconds;     // then closes in on the next one over this long
-	float radiusFraction;  // the next circle's radius as a fraction of the current one (0 closes it completely)
-	float damagePerSecond; // health lost per second outside the circle while this phase lasts (players have 100)
-
-	void BR_ZonePhase(int wait = 60, int shrink = 60, float fraction = 0.5, float damage = 1)
-	{
-		waitSeconds = wait;
-		shrinkSeconds = shrink;
-		radiusFraction = fraction;
-		damagePerSecond = damage;
-	}
-}
-
 class BR_Settings
 {
 	static const string FILE = "$mission:battleroyale.json";
@@ -35,7 +19,41 @@ class BR_Settings
 	int supplyDropSeconds = 240;   // a supply drop this often, inside the next circle (0: none)
 	float planeSpeed = 120;        // m/s: the plane crosses the first circle (about 15 km) in about 2 minutes
 	float planeHeight = 400;       // m above the highest ground under its route
-	ref array<ref BR_ZonePhase> phases;
+	// The circle repeats three steps, circle after circle:
+	//   cooldown      nobody knows where the next circle is (at the start of a round no circle
+	//                 is shown and the whole map is safe; after that the red circle is closing on
+	//                 the white one meanwhile)
+	//   reveal        the next (white) circle is drawn and announced
+	//   notification  then the old white circle turns red and closes on the new white one, over
+	//                 the next cooldown (the first time, from a red circle just round the map)
+	// Each list is per circle, the last value repeating. A white circle smaller than
+	// circleMinRadius becomes nothing: when the red has closed on it, the storm is everywhere and
+	// the last one alive wins.
+	ref array<int> circleSeconds;       // the cooldown, and the notification, of each circle
+	ref array<float> circleFractions;   // each white circle's radius, as a fraction of the one before
+	ref array<float> circleDamage;      // health per second outside the circle (players have 100)
+	float circleMinRadius = 25;
+	bool testStorm = false;        // testing only: no plane; everyone starts on the ground just outside
+	                               // the first white circle, with the red already closing on them
+	float testWhiteRadius = 0;     // testing only, with testStorm: that first white circle's radius (0: the usual)
+	int testBots = 0;              // testing only: this many AI survivors join each round, inside the
+	                               // first white circle, and play it out as players (they just stand there)
+
+	// per circle, the last value repeating
+	int CircleSeconds(int circle)
+	{
+		return circleSeconds[Math.Min(circle, circleSeconds.Count() - 1)];
+	}
+
+	float CircleFraction(int circle)
+	{
+		return circleFractions[Math.Min(circle, circleFractions.Count() - 1)];
+	}
+
+	float CircleDamage(int circle)
+	{
+		return circleDamage[Math.Min(circle, circleDamage.Count() - 1)];
+	}
 
 	static BR_Settings Load()
 	{
@@ -49,17 +67,15 @@ class BR_Settings
 		else
 			Print("[BattleRoyale] no " + FILE + " - using the defaults");
 
-		if (!s.phases || s.phases.Count() == 0)
-		{
-			s.phases = new array<ref BR_ZonePhase>();
-			s.phases.Insert(new BR_ZonePhase(300, 210, 0.7, 1)); // nothing shown for the first 5 minutes
-			s.phases.Insert(new BR_ZonePhase(180, 180, 0.65, 1));
-			s.phases.Insert(new BR_ZonePhase(150, 150, 0.6, 2));
-			s.phases.Insert(new BR_ZonePhase(120, 90, 0.55, 4));
-			s.phases.Insert(new BR_ZonePhase(75, 60, 0.5, 6));
-			s.phases.Insert(new BR_ZonePhase(60, 45, 0.4, 8));
-			s.phases.Insert(new BR_ZonePhase(45, 45, 0.0, 10));
-		}
+		array<int> seconds = {300, 240, 180, 120, 60, 30};
+		array<float> fractions = {0.7, 0.65, 0.6, 0.55, 0.5, 0.4, 0.5};
+		array<float> damage = {1, 1, 2, 4, 6, 8, 10};
+		if (!s.circleSeconds || s.circleSeconds.Count() == 0)
+			s.circleSeconds = seconds;
+		if (!s.circleFractions || s.circleFractions.Count() == 0)
+			s.circleFractions = fractions;
+		if (!s.circleDamage || s.circleDamage.Count() == 0)
+			s.circleDamage = damage;
 		return s;
 	}
 }

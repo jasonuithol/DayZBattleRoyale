@@ -367,9 +367,15 @@ class BR_Loot
 			GetGame().ObjectDelete(held);
 	}
 
+	// a fresh start: stripped, fully healed (every limb, broken legs, bleeding, diseases, food
+	// and water) and given the plain kit
 	static void Kit(PlayerBase player)
 	{
 		Strip(player);
+		array<string> zones = new array<string>();
+		player.GetDamageZones(zones);
+		for (int z = 0; z < zones.Count(); z++)
+			player.SetHealthMax(zones[z], "Health");
 		player.SetHealth("", "", player.GetMaxHealth("", ""));
 		player.SetHealth("GlobalHealth", "Blood", player.GetMaxHealth("GlobalHealth", "Blood"));
 		player.SetHealth("GlobalHealth", "Shock", player.GetMaxHealth("GlobalHealth", "Shock"));
@@ -377,6 +383,9 @@ class BR_Loot
 		player.GetStatWater().Set(player.GetStatWater().GetMax());
 		if (player.GetBleedingManagerServer())
 			player.GetBleedingManagerServer().RemoveAllSources();
+		player.RemoveAllAgents();
+		if (player.GetBrokenLegs() != eBrokenLegs.NO_BROKEN_LEGS)
+			player.SetBrokenLegs(eBrokenLegs.NO_BROKEN_LEGS);
 		player.GetInventory().CreateInInventory("TShirt_Grey");
 		player.GetInventory().CreateInInventory("Jeans_Blue");
 		player.GetInventory().CreateInInventory("AthleticShoes_Black");

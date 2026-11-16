@@ -13,13 +13,11 @@
     "supplyDropSeconds": 240,
     "planeSpeed": 120,
     "planeHeight": 400,
-    "phases": [
-        { "waitSeconds": 300, "shrinkSeconds": 210, "radiusFraction": 0.7,  "damagePerSecond": 1 },
-        { "waitSeconds": 180, "shrinkSeconds": 180, "radiusFraction": 0.65, "damagePerSecond": 1 },
-        { "waitSeconds": 150, "shrinkSeconds": 150, "radiusFraction": 0.6,  "damagePerSecond": 2 },
-        { "waitSeconds": 120, "shrinkSeconds": 90,  "radiusFraction": 0.55, "damagePerSecond": 4 },
-        { "waitSeconds": 75,  "shrinkSeconds": 60,  "radiusFraction": 0.5,  "damagePerSecond": 6 },
-        { "waitSeconds": 60,  "shrinkSeconds": 45,  "radiusFraction": 0.4,  "damagePerSecond": 8 },
-        { "waitSeconds": 45,  "shrinkSeconds": 45,  "radiusFraction": 0.0,  "damagePerSecond": 10 }
-    ]
+    "circleSeconds": [300, 240, 180, 120, 60, 30],
+    "circleFractions": [0.7, 0.65, 0.6, 0.55, 0.5, 0.4, 0.5],
+    "circleDamage": [1, 1, 2, 4, 6, 8, 10],
+    "circleMinRadius": 25,
+    "testStorm": false,
+    "testWhiteRadius": 0,
+    "testBots": 0
 }

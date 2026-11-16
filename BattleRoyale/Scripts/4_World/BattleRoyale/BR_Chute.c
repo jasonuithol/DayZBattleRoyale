@@ -198,6 +198,9 @@ modded class PlayerBase
 	protected int m_BR_ChuteOpenId;  // synced: the jump whose chute the player opened (F)
 	protected float m_BR_LoggedAt;
 	protected Object m_BR_Canopy;    // client: the parachute above this player (local, visual only)
+	protected EntityAI m_BR_Pack;    // server: the parachute pack on the jumper's back, for the jump only
+
+	static const string BR_PACK = "AssaultBag_Black"; // a compact vanilla bag stands in for the rig
 
 	override void Init()
 	{
@@ -213,12 +216,21 @@ modded class PlayerBase
 		m_BR_ChuteId++;
 		SetSynchDirty();
 		SetAllowDamage(false);
+		// the pack on the back, for the jump (only if the back is free: the kit has no bag)
+		if (!m_BR_Pack && !FindAttachmentBySlotName("Back"))
+			m_BR_Pack = GetInventory().CreateAttachment(BR_PACK);
 	}
 
 	protected void BR_Landed()
 	{
-		if (GetGame().IsServer())
-			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(BR_DamageAgain, 3000, false);
+		if (!GetGame().IsServer())
+			return;
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(BR_DamageAgain, 3000, false);
+		if (m_BR_Pack)
+		{
+			GetGame().ObjectDelete(m_BR_Pack); // the pack goes once they're down
+			m_BR_Pack = null;
+		}
 	}
 
 	protected void BR_DamageAgain()

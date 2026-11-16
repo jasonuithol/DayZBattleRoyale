@@ -50,4 +50,10 @@ class CfgVehicles
 		scope = 1;
 		model = "\BattleRoyale\data\parachute.p3d";
 	};
+	// one 10 m panel of the glowing wall along the circle's edge (client-only, no collision)
+	class BR_StormWall: HouseNoDestruct
+	{
+		scope = 1;
+		model = "\BattleRoyale\data\stormwall.p3d";
+	};
 };

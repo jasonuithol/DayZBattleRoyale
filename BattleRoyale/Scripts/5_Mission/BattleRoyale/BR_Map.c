@@ -71,10 +71,25 @@ modded class ExpansionMapMenu
 		if (!state || GetGame().GetTickTime() - BR_Client.s_ReceivedAt > 5 || state.phase == BR_Phase.LOBBY)
 			return;
 
+		// the next circle, once it's announced, in white. The current one (the edge of the storm)
+		// is white while it's the only one, turns yellow when the next is announced, and red
+		// while it closes on it: there's only ever one white circle on the map
 		if (state.hasNext)
 			BR_Circle(state.nextCenter, state.nextRadius, 2, ARGB(255, 255, 255, 255));
-		if (!state.wholeMap) // at the start of a round the whole map is safe: no circles yet
-			BR_Circle(state.center, state.radius, 3, ARGB(255, 230, 50, 50));
+		if (!state.wholeMap && state.radius > 0)
+		{
+			if (state.closing)
+			{
+				vector redCenter;
+				float redRadius;
+				BR_Client.CircleNow(redCenter, redRadius);
+				BR_Circle(redCenter, redRadius, 3, ARGB(255, 230, 50, 50));
+			}
+			else if (state.hasNext)
+				BR_Circle(state.center, state.radius, 3, ARGB(255, 245, 200, 40));
+			else
+				BR_Circle(state.center, state.radius, 2, ARGB(255, 255, 255, 255));
+		}
 
 		if (state.flying)
 		{

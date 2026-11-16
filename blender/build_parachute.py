@@ -83,6 +83,7 @@ class CfgModels
 		skeletonName = "";
 	};
 	class parachute: Default {};
+	class stormwall: Default {};   // blender/build_stormwall.py (this file is shared)
 };
 '''
 

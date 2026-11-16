@@ -1,0 +1,9 @@
+// The storm wall: unlit-looking glow (emissive) through the texture's alpha
+ambient[] = {1, 1, 1, 1};
+diffuse[] = {1, 1, 1, 1};
+forcedDiffuse[] = {0, 0, 0, 0};
+emmisive[] = {4, 4, 4, 1};
+specular[] = {0, 0, 0, 0};
+specularPower = 1;
+PixelShaderID = "Normal";
+VertexShaderID = "Basic";

@@ -1,5 +1,5 @@
 // Shared by server and client: the round phases, the state the server sends every second,
-// the jump request going the other way, and the screen tint for being outside the circle.
+// and the jump request going the other way.
 
 enum BR_Phase
 {
@@ -17,9 +17,11 @@ class BR_State
 	int phase;
 	bool inRound;      // this player is alive in the current round
 	bool inPlane;      // ... and still on the plane: F jumps
-	bool wholeMap;     // the start of a round: the whole map is safe, no circle drawn yet
+	bool wholeMap;     // the start of a round: the whole map is safe, no current circle yet
+	bool closing;      // the current circle is closing on the next: drawn red (white otherwise)
 	vector center;     // the circle right now
 	float radius;
+	float closeLeft;   // while closing: seconds until it reaches the next circle (it closes evenly)
 	bool hasNext;      // the next circle is known (not after the last one has closed)
 	vector nextCenter;
 	float nextRadius;
@@ -37,8 +39,10 @@ class BR_State
 		ctx.Write(inRound);
 		ctx.Write(inPlane);
 		ctx.Write(wholeMap);
+		ctx.Write(closing);
 		ctx.Write(center);
 		ctx.Write(radius);
+		ctx.Write(closeLeft);
 		ctx.Write(hasNext);
 		ctx.Write(nextCenter);
 		ctx.Write(nextRadius);
@@ -53,7 +57,7 @@ class BR_State
 
 	bool Read(ParamsReadContext ctx)
 	{
-		if (!ctx.Read(phase) || !ctx.Read(inRound) || !ctx.Read(inPlane) || !ctx.Read(wholeMap) || !ctx.Read(center) || !ctx.Read(radius))
+		if (!ctx.Read(phase) || !ctx.Read(inRound) || !ctx.Read(inPlane) || !ctx.Read(wholeMap) || !ctx.Read(closing) || !ctx.Read(center) || !ctx.Read(radius) || !ctx.Read(closeLeft))
 			return false;
 		if (!ctx.Read(hasNext) || !ctx.Read(nextCenter) || !ctx.Read(nextRadius))
 			return false;
@@ -123,6 +127,20 @@ class BR_Client
 	static vector PlaneNow()
 	{
 		return BR_Plane.Now();
+	}
+
+	// the circle as it is this frame: while it closes, moved on from the last state the way the
+	// server moves it (evenly, onto the next circle), so the wall and the map glide rather
+	// than step once a second
+	static void CircleNow(out vector center, out float radius)
+	{
+		center = s_State.center;
+		radius = s_State.radius;
+		if (!s_State.closing || s_State.closeLeft <= 0 || !s_State.hasNext)
+			return;
+		float f = Math.Clamp((GetGame().GetTickTime() - s_ReceivedAt) / s_State.closeLeft, 0, 1);
+		center = center + (s_State.nextCenter - center) * f;
+		radius = radius + (s_State.nextRadius - radius) * f;
 	}
 
 	// F: with where this game shows the plane, so the jump starts at the plane the player sees
@@ -212,16 +230,5 @@ modded class DayZGame
 			return;
 		}
 		super.OnRPC(sender, target, rpc_type, ctx);
-	}
-}
-
-// Outside the circle the world turns blue: the blue sport glasses' tint, stronger, on the
-// layer the contaminated areas use (so it doesn't fight real glasses).
-class PPERequester_BRZone extends PPERequester_GameplayBase
-{
-	override protected void OnStart(Param par = null)
-	{
-		super.OnStart();
-		SetTargetValueColor(PostProcessEffectType.Glow, PPEGlow.PARAM_COLORIZATIONCOLOR, {0.5, 0.5, 0.0, 0.0}, PPEGlow.L_23_TOXIC_TINT, PPOperators.SUBSTRACT);
 	}
 }
