@@ -14,6 +14,7 @@ class BR_ChuteCommand: HumanCommandScript
 	static const float AUTO_OPEN_HEIGHT = 100; // m above the ground, if the player hasn't opened it
 	static const float HANDOVER_HEIGHT = 1.5;  // m: vanilla's own fall takes over from here, and lands
 	static const float BLOCKED_HEIGHT = 60;    // m: below this, being unable to go down is a landing (on a roof, a rock)
+	static const float LOOK_DOWN = 150;        // m above the terrain: below this, roofs and the like count as the ground
 
 	protected PlayerBase m_Player;
 	protected HumanInputController m_Input;
@@ -46,6 +47,30 @@ class BR_ChuteCommand: HumanCommandScript
 	static float HeightAboveGround(vector pos)
 	{
 		return pos[1] - GetGame().SurfaceY(pos[0], pos[2]);
+	}
+
+	// What it would land on: the terrain, or whatever is under the player above it (a roof, a
+	// car, a rock), seen with a ray straight down through the collision geometry. The terrain
+	// alone pulled a jumper coming down on a roof through it to the ground. Plants don't count
+	// (a treetop is no place to land): the terrain under them does.
+	static float LandingHeight(vector pos, Object ignore)
+	{
+		float terrain = GetGame().SurfaceY(pos[0], pos[2]);
+		if (pos[1] - terrain > LOOK_DOWN)
+			return terrain;
+		vector hit, normal;
+		int comp;
+		set<Object> objects = new set<Object>;
+		vector from = Vector(pos[0], pos[1] + 0.5, pos[2]);
+		vector to = Vector(pos[0], terrain - 0.5, pos[2]);
+		if (!DayZPhysics.RaycastRV(from, to, hit, normal, comp, objects, null, ignore, true, false, ObjIntersectGeom))
+			return terrain;
+		for (int i = 0; i < objects.Count(); i++)
+		{
+			if (objects[i] && (objects[i].IsTree() || objects[i].IsBush()))
+				return terrain;
+		}
+		return Math.Max(hit[1], terrain);
 	}
 
 	// The pose comes from the stance alone: lying on the belly in free fall, standing under the
@@ -99,6 +124,8 @@ class BR_ChuteCommand: HumanCommandScript
 		m_Age += pDt;
 		vector pos = m_Player.GetPosition();
 		float agl = HeightAboveGround(pos);
+		if (m_Airborne)
+			agl = pos[1] - LandingHeight(pos, m_Player); // roofs count once it's in the air
 
 		// the jumper's own game can hear about the jump before the move out to the plane: wait,
 		// still standing in the lobby, until it's in the air (10 s at most)
@@ -181,7 +208,7 @@ class BR_ChuteCommand: HumanCommandScript
 		if (m_Landing)
 			return;
 		m_Landing = true; // finished next frame, in PreAnimUpdate
-		Print("[BattleDayZ] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up");
+		Print("[BattleDayZ] chute landing (" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up at " + m_Player.GetPosition());
 	}
 
 	override bool PostPhysUpdate(float pDt)

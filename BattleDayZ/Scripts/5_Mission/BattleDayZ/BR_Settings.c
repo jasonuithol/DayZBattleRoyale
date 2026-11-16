@@ -14,7 +14,9 @@ class BR_Settings
 	float startRadius = 8000;      // the first circle: all of Nasdara (its buildings cover about 13 x 14 km)
 	float circleDrift = 0.5;       // how far off-centre each next circle can be: 0 always centred, 1 anywhere inside
 	int lootBuildings = 6000;      // buildings inside the first circle that get loot (bigger ones get up to 4 piles)
-	int cars = 40;                 // cars at vanilla car spawn points inside the first circle
+	int cars = 100;                // cars at vanilla car spawn points inside the first circle
+	ref array<string> vehicles;    // what spawns at the car spots, one entry per vehicle, equally likely:
+	                               // its colours as "A|B|C", one picked at random
 	float carFuel = 0.15;          // fraction of a full tank
 	int supplyDropSeconds = 240;   // a supply drop this often, inside the next circle (0: none)
 	float planeSpeed = 120;        // m/s: the plane crosses the first circle (about 15 km) in about 2 minutes
@@ -76,6 +78,15 @@ class BR_Settings
 			s.circleFractions = fractions;
 		if (!s.circleDamage || s.circleDamage.Count() == 0)
 			s.circleDamage = damage;
+		if (!s.vehicles || s.vehicles.Count() == 0)
+		{
+			array<string> defaultVehicles = {
+				"Motorbike_02_Red|Motorbike_02_Yellow|Motorbike_02_Blue|Motorbike_02_Green",
+				"OffroadHatchback|OffroadHatchback_Blue|OffroadHatchback_White",
+				"Offroad_02",
+				"Expansion_Landrover|Expansion_Landrover_Yellow|Expansion_Landrover_Green|Expansion_Landrover_Red|Expansion_Landrover_Grey|Expansion_Landrover_Blue|Expansion_Landrover_Orange"};
+			s.vehicles = defaultVehicles;
+		}
 		return s;
 	}
 }

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2 - 2026-11-16
+
+- **Vehicles:** 100 of them, each an enduro motorbike, an Ada 4x4, an M1025 or Expansion's Land Rover
+  (the `vehicles` setting), with every part fitted and 15% fuel.
+- **Guns:** two per calibre, fourteen in all (9 mm, .45, .357, .308, 12 gauge, 7.62×39,
+  5.56×45), every one loaded, including revolver cylinders and both shotgun barrels. The
+  attachments are the ones that fit them, and the supply drop has an M16-A2 and a DMR.
+- **Frag grenades** in the loot.
+- **Sights:** only Mini Sights, Baraka, ACOG, Combat Sights and the hunting scope. Sights and
+  suppressors ignore NATO and Soviet mounts (`config.cpp`).
+- **Sights that take a battery** come with one fitted.
+- **The kit** adds a military belt with a pistol holster.
+- **Molotovs** in the loot, with matches. Molotov, Better Explosions and Expansion Vehicles are
+  now required mods.
+- **Vehicles last the round:** Nasdara's economy gave the Ada and some motorbike colours a
+  3-second lifetime and deleted them half a minute after they spawned; every vehicle now gets
+  a day.
+- **Clean-up:** blown-up vehicles' wrecks, the parts thrown off and fires go with the round.
+- **Roof landings:** the parachute lands you on whatever is under you (a roof, a car, a rock);
+  it used to pull you through a roof to the ground. The landing log line has the position.
+
 ## 0.1 - 2026-11-16
 
 First playable demo on Nasdara: solo rounds, with the simplest version of every feature.

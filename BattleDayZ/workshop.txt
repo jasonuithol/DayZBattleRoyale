@@ -2,10 +2,11 @@ Battle royale rounds on Nasdara, solo, last one standing wins. Everyone starts e
 
 [h2]A round[/h2]
 [list]
-[*] [b]The lobby:[/b] everyone waits off the edge of the map, can't be hurt, and is reset to the same plain kit at full health. A countdown at the top of the screen shows when the next round starts.
+[*] [b]The lobby:[/b] everyone waits off the edge of the map, can't be hurt, and is reset to the same plain kit at full health, with a belt and a pistol holster. A countdown at the top of the screen shows when the next round starts.
 [*] [b]The plane:[/b] it crosses the whole map edge to edge, its route drawn on the map. You watch from behind it and can orbit it with the mouse. Press [b]F[/b] to jump.
-[*] [b]The jump:[/b] a long free fall lying flat, steering with the movement keys. Press [b]F[/b] again to open the parachute, or it opens by itself 100 m up. Then glide down under a steerable canopy that everyone can see. No damage from the jump.
-[*] [b]Loot:[/b] guns that come loaded with spare ammo next to them, three tiers of helmets, vests and backpacks, sights, suppressors and drum mags, bandages, morphine and jerry cans. There are cars with a little fuel, and supply drops of top-tier gear inside the next circle.
+[*] [b]The jump:[/b] a long free fall lying flat, steering with the movement keys. Press [b]F[/b] again to open the parachute, or it opens by itself 100 m up. Then glide down under a steerable canopy that everyone can see, and land on the ground or on a roof. No damage from the jump.
+[*] [b]Loot:[/b] fourteen guns, two per calibre (9 mm, .45, .357, .308, 12 gauge, 7.62x39, 5.56x45), loaded and with spare ammo next to them. Three tiers of helmets, vests and backpacks. Sights (Mini Sights, Baraka, ACOG, Combat Sights, hunting scope, with batteries in) and suppressors that fit NATO and Soviet guns alike, extended mags, frag grenades, Molotovs, bandages, morphine and jerry cans. Supply drops of top-tier gear come down inside the next circle.
+[*] [b]Vehicles:[/b] 100 of them, enduro motorbikes, Ada 4x4s, M1025s and Land Rovers, with every part fitted and a little fuel.
 [*] [b]The circle:[/b] after 5 minutes the first circle is announced in white, and a red circle closes in on it from around the whole map. Then it repeats: the next circle is announced in white, the one you're in turns yellow, and after a countdown the yellow turns red and closes on the white. It gets faster each circle until it closes to nothing.
 [*] [b]The storm:[/b] outside the circle you're in a gas zone, with the gas, the tint and the sound. A glowing red wall with gas behind it shows where the edge is, and glides in as it closes. Every few seconds the storm hits you: you flinch, grunt and sometimes start bleeding, and it hurts more each circle. You can still bandage in it.
 [*] [b]The end:[/b] the last player alive wins and everyone is told. Then everything the round spawned is cleared away and the next round starts.
@@ -19,6 +20,6 @@ Battle royale rounds on Nasdara, solo, last one standing wins. Everyone starts e
 [/list]
 
 [h2]Requirements[/h2]
-Players and the server both need: Community Framework, Dabs Framework, DayZ-Expansion-Licensed, DayZ-Expansion-Core, DayZ-Expansion-Navigation, DayZ-Expansion-Missions and Flying Without Crash To Desktop.
+Players and the server both need: Community Framework, Dabs Framework, DayZ-Expansion-Licensed, DayZ-Expansion-Core, DayZ-Expansion-Navigation, DayZ-Expansion-Missions, DayZ-Expansion-Vehicles, Flying Without Crash To Desktop, Molotov Cocktail, Better Explosions and Better Explosions - Expansion Vehicles.
 
-The server also needs the battle royale mission for Nasdara, which holds the settings, the loot spots, and the Central Economy switched off. This first version is a demo: solo only, and so far played by one player against test bots.
+The server also needs the battle royale mission for Nasdara, which holds the settings, the loot spots, and the Central Economy switched off. This is still an early version: solo only, and so far played by one player against test bots.

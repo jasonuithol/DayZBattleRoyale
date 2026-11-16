@@ -5,7 +5,7 @@ class CfgPatches
 		units[] = {};
 		weapons[] = {};
 		requiredVersion = 0.1;
-		requiredAddons[] = {"DZ_Data", "DZ_Scripts", "DayZExpansion_Missions_Scripts", "DayZExpansion_Navigation_Scripts", "FlyingWithoutCTD"};
+		requiredAddons[] = {"DZ_Data", "DZ_Scripts", "DayZExpansion_Missions_Scripts", "DayZExpansion_Navigation_Scripts", "FlyingWithoutCTD", "DZ_Weapons_Optics", "DZ_Weapons_Muzzles"};
 	};
 };
 
@@ -45,6 +45,18 @@ class CfgVehicles
 
 	//! The open parachute: visual only (no geometry, so it collides with nothing), created
 	//! locally by each game above every jumper whose chute is open (BR_Chute.c)
+	// No NATO / Soviet split for sights and suppressors: the rail sights in the loot (ACOG,
+	// Baraka, Combat Sights) also go on the AK dovetail; both rifle suppressors fit the M4 and AK
+	// muzzles, and the slot the DMR and SK 59/66 only have for an improvised suppressor. (The
+	// M16-A2 has no sight slot.)
+	class ItemOptics_Base;
+	class ACOGOptic: ItemOptics_Base { inventorySlot[] = {"WeaponOptics", "weaponOpticsAK"}; };
+	class ReflexOptic: ItemOptics_Base { inventorySlot[] = {"WeaponOptics", "weaponOpticsAK"}; };
+	class M68Optic: ItemOptics_Base { inventorySlot[] = {"weaponOptics", "weaponOpticsAK"}; };
+	class ItemSuppressor;
+	class M4_Suppressor: ItemSuppressor { inventorySlot[] = {"weaponMuzzleM4", "weaponMuzzleAK", "suppressorImpro"}; };
+	class AK_Suppressor: ItemSuppressor { inventorySlot[] = {"weaponMuzzleAK", "weaponMuzzleM4", "suppressorImpro"}; };
+
 	class BR_Parachute: HouseNoDestruct
 	{
 		scope = 1;

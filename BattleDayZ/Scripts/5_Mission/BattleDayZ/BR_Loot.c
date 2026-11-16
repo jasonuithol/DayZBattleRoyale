@@ -20,14 +20,17 @@ class BR_Weapon
 class BR_Loot
 {
 	static const int AMMO_BOXES = 3;
+	static const float VEHICLE_LIFETIME = 86400; // s: a day, longer than any round
+	static const ref array<string> BELT_HOLSTERS = {"PlateCarrierHolster", "ChestHolster"};
 	static const float SUPPLY_PLANE_SPEED = 200; // m/s, about a minute from the map edge
 	static const float CRATE_LIFETIME = 3600;    // s; at 0 (Expansion's default) the economy deletes a landed crate once nobody is near it. Rounds clear crates anyway
 
-	protected static ref array<ref BR_Weapon> s_Weapons;
+	static ref array<ref BR_Weapon> s_Weapons;
 	protected static ref array<string> s_Helmets;     // tier 1, 2, 3
 	protected static ref array<string> s_Vests;
 	protected static ref array<string> s_Backpacks;
 	protected static ref array<string> s_Attachments;
+	static ref array<string> s_Grenades = {"M67Grenade", "RGD5Grenade"};
 
 	static void Init()
 	{
@@ -35,22 +38,34 @@ class BR_Loot
 			return;
 		s_Weapons = new array<ref BR_Weapon>();
 		BR_Weapon w;
-		w = new BR_Weapon("AKM", "Mag_AKM_30Rnd", "AmmoBox_762x39_20Rnd");
+		// two of each calibre; a gun with no magazine ("") loads from inside (internal magazine)
+		s_Weapons.Insert(new BR_Weapon("Glock19", "Mag_Glock_15Rnd", "AmmoBox_9x19_25rnd"));       // Mlock-91
+		s_Weapons.Insert(new BR_Weapon("MP5K", "Mag_MP5_30Rnd", "AmmoBox_9x19_25rnd"));            // SG5-K
+		s_Weapons.Insert(new BR_Weapon("FNX45", "Mag_FNX45_15Rnd", "AmmoBox_45ACP_25rnd"));        // FX-45
+		s_Weapons.Insert(new BR_Weapon("UMP45", "Mag_UMP_25Rnd", "AmmoBox_45ACP_25rnd"));          // USG-45
+		s_Weapons.Insert(new BR_Weapon("Magnum", "", "AmmoBox_357_20Rnd"));                        // Revolver
+		s_Weapons.Insert(new BR_Weapon("Repeater", "", "AmmoBox_357_20Rnd"));                      // Repeater Carbine (lever action)
+		s_Weapons.Insert(new BR_Weapon("Winchester70", "", "AmmoBox_308Win_20Rnd"));               // M70 Tundra
+		s_Weapons.Insert(new BR_Weapon("M14", "Mag_M14_10Rnd", "AmmoBox_308Win_20Rnd"));           // DMR
+		s_Weapons.Insert(new BR_Weapon("Izh43Shotgun", "", "AmmoBox_00buck_10rnd"));               // BK-43
+		s_Weapons.Insert(new BR_Weapon("R12", "", "AmmoBox_00buck_10rnd"));                        // R12
+		w = new BR_Weapon("AKM", "Mag_AKM_30Rnd", "AmmoBox_762x39_20Rnd");                         // KA-M
 		w.parts.Insert("AK_WoodBttstck");
 		w.parts.Insert("AK_WoodHndgrd");
 		s_Weapons.Insert(w);
-		w = new BR_Weapon("M4A1", "Mag_STANAG_30Rnd", "AmmoBox_556x45_20Rnd");
-		w.parts.Insert("M4_OEBttstck");
-		w.parts.Insert("M4_RISHndgrd");
+		s_Weapons.Insert(new BR_Weapon("SKS", "", "AmmoBox_762x39_20Rnd"));                        // SK 59/66
+		s_Weapons.Insert(new BR_Weapon("M16A2", "Mag_STANAG_30Rnd", "AmmoBox_556x45_20Rnd"));      // M16-A2
+		w = new BR_Weapon("AK101", "Mag_AK101_30Rnd", "AmmoBox_556x45_20Rnd");                     // KA-101
+		w.parts.Insert("AK_PlasticBttstck");
+		w.parts.Insert("AK_PlasticHndgrd");
 		s_Weapons.Insert(w);
-		s_Weapons.Insert(new BR_Weapon("MP5K", "Mag_MP5_30Rnd", "AmmoBox_9x19_25rnd"));
-		s_Weapons.Insert(new BR_Weapon("SVD", "Mag_SVD_10Rnd", "AmmoBox_762x54_20Rnd"));
-		s_Weapons.Insert(new BR_Weapon("Saiga", "Mag_Saiga_8Rnd", "AmmoBox_00buck_10rnd"));
 
 		s_Helmets = {"Ssh68Helmet", "BallisticHelmet_Black", "GorkaHelmet"};
 		s_Vests = {"PoliceVest", "PressVest_Blue", "PlateCarrierVest"};
 		s_Backpacks = {"ChildBag_Blue", "TaloonBag_Blue", "AliceBag_Green"};
-		s_Attachments = {"ACOGOptic", "ReflexOptic", "KobraOptic", "PSO1Optic", "M4_Suppressor", "AK_Suppressor", "Mag_STANAG_60Rnd", "Mag_AKM_Drum75Rnd"};
+		// each fits at least one of the guns (the headless test lists which)
+		// sights: Mini, Baraka, ACOG, Combat Sights and the hunting scope only
+		s_Attachments = {"FNP45_MRDSOptic", "ReflexOptic", "ACOGOptic", "M68Optic", "HuntingOptic", "PistolSuppressor", "M4_Suppressor", "AK_Suppressor", "Mag_STANAG_60Rnd", "Mag_AKM_Drum75Rnd", "Mag_M14_20Rnd"};
 	}
 
 	// every class name the loot uses, for the startup check
@@ -72,6 +87,9 @@ class BR_Loot
 		all.Insert("BandageDressing");
 		all.Insert("Morphine");
 		all.Insert("CanisterGasoline");
+		all.InsertAll(s_Grenades);
+		all.Insert("Molotov");
+		all.Insert("Matchbox");
 		return all;
 	}
 
@@ -95,7 +113,7 @@ class BR_Loot
 		return item;
 	}
 
-	// a gun with a full magazine in it and its ammo boxes beside it
+	// a loaded gun (a full magazine in it, or its internal magazine full) and its ammo boxes beside it
 	static void WeaponPile(BR_Weapon w, vector pos, array<Object> spawned)
 	{
 		Weapon_Base gun = Weapon_Base.Cast(Item(w.weapon, pos, spawned));
@@ -103,12 +121,26 @@ class BR_Loot
 			return;
 		for (int p = 0; p < w.parts.Count(); p++)
 			gun.GetInventory().CreateAttachment(w.parts[p]);
-		gun.SpawnAttachedMagazine(w.mag);
+		if (w.mag != "")
+			gun.SpawnAttachedMagazine(w.mag);
+		else
+		{
+			gun.SpawnAmmo("", WeaponWithAmmoFlags.CHAMBER);
+			gun.FillChamber("", WeaponWithAmmoFlags.CHAMBER); // every chamber: the revolver's six, both of the BK-43's barrels
+		}
 		for (int b = 0; b < AMMO_BOXES; b++)
 		{
 			vector offset = Vector(Math.RandomFloat(-0.4, 0.4), 0.05, Math.RandomFloat(-0.4, 0.4));
 			Item(w.ammo, pos + offset, spawned);
 		}
+	}
+
+	// a sight (or anything else) that runs on a 9V battery comes with one fitted; a no-op for
+	// everything without a battery slot
+	static void WithBattery(EntityAI item)
+	{
+		if (item && item.GetInventory().GetAttachmentSlotsCount() > 0)
+			item.GetInventory().CreateAttachment("Battery9V");
 	}
 
 	// 1, 2 or 3 at 60 / 30 / 10 percent
@@ -134,9 +166,17 @@ class BR_Loot
 			Item(Tiered(s_Vests), pos, spawned);
 		else if (roll < 55)
 			Item(Tiered(s_Backpacks), pos, spawned);
-		else if (roll < 70)
-			Item(s_Attachments.GetRandomElement(), pos, spawned);
-		else if (roll < 88)
+		else if (roll < 65)
+			WithBattery(Item(s_Attachments.GetRandomElement(), pos, spawned));
+		else if (roll < 71)
+			Item(s_Grenades.GetRandomElement(), pos, spawned);
+		else if (roll < 77)
+		{
+			// a molotov (the Molotov mod), and something to light it with
+			Item("Molotov", pos, spawned);
+			Item("Matchbox", pos, spawned);
+		}
+		else if (roll < 91)
 		{
 			if (Math.RandomInt(0, 3) == 0)
 				Item("Morphine", pos, spawned);
@@ -242,8 +282,9 @@ class BR_Loot
 
 	// --- cars ------------------------------------------------------------------------
 
-	// Ready-to-drive cars at vanilla car spawn points inside the circle, with a little fuel.
-	static int Cars(BR_Spots spots, vector center, float radius, int count, float fuel, array<Object> spawned)
+	// Ready-to-drive vehicles at vanilla car spawn points inside the circle, with a little fuel:
+	// each one of `vehicles` (an entry per vehicle, its colours "A|B|C"), equally likely.
+	static int Cars(BR_Spots spots, vector center, float radius, int count, float fuel, array<string> vehicles, array<Object> spawned)
 	{
 		array<int> inside = new array<int>();
 		for (int i = 0; i < spots.cars.Count(); i++)
@@ -259,20 +300,59 @@ class BR_Loot
 			BR_CarSpot spot = spots.cars[inside[pick]];
 			inside.Remove(pick);
 
-			array<string> types = new array<string>();
-			spot.types.Split("|", types);
+			array<string> colours = new array<string>();
+			vehicles.GetRandomElement().Split("|", colours);
 			vector pos = Vector(spot.x, GetGame().SurfaceY(spot.x, spot.z) + 0.3, spot.z); // a hair below ground and it falls through the map
-			CarScript car = CarScript.Cast(GetGame().CreateObjectEx(types.GetRandomElement(), pos, ECE_PLACE_ON_SURFACE | ECE_SETUP));
-			if (!car)
+			EntityAI vehicle = Vehicle(colours.GetRandomElement(), pos, spot.h, fuel);
+			if (!vehicle)
 				continue;
-			car.SetOrientation(Vector(spot.h, 0, 0));
-			CarScript.s_BR_Fuel = fuel;
-			car.OnDebugSpawn(); // every part fitted, every fluid full except the tank
-			CarScript.s_BR_Fuel = -1;
-			spawned.Insert(car);
+			Print("[BattleDayZ] vehicle " + vehicle.GetType() + " at " + vehicle.GetPosition());
+			spawned.Insert(vehicle);
 			done++;
 		}
 		return done;
+	}
+
+	// one vehicle with every part fitted, every fluid full except the tank, which gets `fuel`
+	static EntityAI Vehicle(string type, vector pos, float heading, float fuel)
+	{
+		EntityAI vehicle = EntityAI.Cast(GetGame().CreateObjectEx(type, pos, ECE_PLACE_ON_SURFACE | ECE_SETUP));
+		if (!vehicle)
+		{
+			Print("[BattleDayZ] could not create the vehicle " + type);
+			return null;
+		}
+		vehicle.SetOrientation(Vector(heading, 0, 0));
+		CarScript car = CarScript.Cast(vehicle);
+		MotorbikeScript bike = MotorbikeScript.Cast(vehicle);
+		if (car)
+		{
+			CarScript.s_BR_Fuel = fuel;
+			car.OnDebugSpawn(); // see BR_CarScript.c
+			CarScript.s_BR_Fuel = -1;
+			// Expansion's vehicles (the Land Rover) fill their tank their own way
+			if (Math.AbsFloat(car.GetFluidFraction(CarFluid.FUEL) - fuel) > 0.02)
+			{
+				car.LeakAll(CarFluid.FUEL);
+				car.Fill(CarFluid.FUEL, car.GetFluidCapacity(CarFluid.FUEL) * fuel);
+			}
+		}
+		else
+		{
+			vehicle.OnDebugSpawn();
+			if (bike)
+			{
+				// vanilla's own way to a part-filled tank (MotorbikeScript): empty it, then fill
+				bike.LeakAll(MotorbikeFluid.FUEL);
+				bike.Fill(MotorbikeFluid.FUEL, bike.GetFluidCapacity(MotorbikeFluid.FUEL) * fuel);
+			}
+		}
+		// last, after the parts and fluids (a car's setup puts its economy lifetime back): the
+		// economy's own lifetime would end it mid-round. Nasdara's types.xml gives the Ada and
+		// some motorbike colours 3 s (the economy deleted them ~35 s after they spawned) and the
+		// M1025 30 minutes. The round deletes its vehicles itself.
+		vehicle.SetLifetime(VEHICLE_LIFETIME);
+		return vehicle;
 	}
 
 	// --- supply drops (Expansion's airdrop plane) -------------------------------------
@@ -280,10 +360,11 @@ class BR_Loot
 	static bool SupplyDrop(vector pos)
 	{
 		array<ref ExpansionLoot> loot = new array<ref ExpansionLoot>();
-		loot.Insert(new ExpansionLoot("M4A1", Parts("Mag_STANAG_60Rnd|ACOGOptic|M4_Suppressor|M4_OEBttstck|M4_RISHndgrd"), 1));
-		loot.Insert(new ExpansionLoot("SVD", Parts("Mag_SVD_10Rnd|PSO1Optic"), 1));
+		loot.Insert(new ExpansionLoot("M16A2", Parts("Mag_STANAG_60Rnd|M4_Suppressor"), 1));
+		loot.Insert(new ExpansionLoot("M14", Parts("Mag_M14_20Rnd|ACOGOptic"), 1));
 		loot.Insert(new ExpansionLoot("AmmoBox_556x45_20Rnd", null, 1));
-		loot.Insert(new ExpansionLoot("AmmoBox_762x54_20Rnd", null, 1));
+		loot.Insert(new ExpansionLoot("AmmoBox_308Win_20Rnd", null, 1));
+		loot.Insert(new ExpansionLoot("M67Grenade", null, 1));
 		loot.Insert(new ExpansionLoot("GorkaHelmet", null, 1));
 		loot.Insert(new ExpansionLoot("PlateCarrierVest", null, 1));
 		loot.Insert(new ExpansionLoot("AliceBag_Green", null, 1));
@@ -368,7 +449,8 @@ class BR_Loot
 	}
 
 	// a fresh start: stripped, fully healed (every limb, broken legs, bleeding, diseases, food
-	// and water) and given the plain kit
+	// and water) and given the plain kit: T-shirt, jeans, trainers, a belt with a pistol holster
+	// and a bandage
 	static void Kit(PlayerBase player)
 	{
 		Strip(player);
@@ -389,6 +471,16 @@ class BR_Loot
 		player.GetInventory().CreateInInventory("TShirt_Grey");
 		player.GetInventory().CreateInInventory("Jeans_Blue");
 		player.GetInventory().CreateInInventory("AthleticShoes_Black");
+		// a belt with a pistol holster on it: the first of these the belt takes
+		EntityAI belt = player.GetInventory().CreateAttachment("MilitaryBelt");
+		if (belt)
+		{
+			foreach (string holster : BELT_HOLSTERS)
+			{
+				if (belt.GetInventory().CreateAttachment(holster))
+					break;
+			}
+		}
 		player.GetInventory().CreateInInventory("BandageDressing");
 	}
 }

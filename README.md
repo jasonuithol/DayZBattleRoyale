@@ -15,10 +15,14 @@ what comes later.
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
    Nasdara, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
-   items) and 40 cars at the vanilla car spawn points. It goes out a few buildings at a time
+   items) and 100 vehicles at the vanilla car spawn points, each equally likely one of: a
+   motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
+   a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
+   which has 15% (`carFuel`). It goes out a few buildings at a time
    over about 25 s, so the server never stalls.
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
-   the same plain kit (T-shirt, jeans, trainers and a bandage), and put on the plane. The time
+   the same plain kit (T-shirt, jeans, trainers, a military belt with a pistol holster on it,
+   and a bandage), and put on the plane. The time
    is set to noon. Expansion's plane crosses the whole map on a straight route, edge to edge,
    through a point near the middle, 400 m above the highest ground under it. That takes 2 to 3
    minutes (`planeSpeed`, `planeHeight`).
@@ -33,7 +37,8 @@ what comes later.
      Under it you're upright, coming down at 6 m/s and steering at 9 m/s. Everyone sees the
      canopy above you.
    - **The pack:** a black assault bag sits on your back from the jump until you land.
-   - **Landing:** about 1.5 m up, the game's own fall takes over and lands you. Nobody can be
+   - **Landing:** about 1.5 m above whatever is under you (the ground, a roof, a car, a rock;
+     not a tree), the game's own fall takes over and lands you. Nobody can be
      hurt from the jump until 3 seconds after landing.
 4. **Game.** The circle goes round the same three steps, circle after circle:
    - **Cooldown:** nobody knows where the next circle is. At the start of a round no circle is
@@ -70,8 +75,8 @@ what comes later.
    - **Supply drops:** the first comes 2 minutes after the circle appears, then one every 4 minutes.
      Expansion's plane drops a crate inside the next circle.
      It flies in fast (200 m/s), so it arrives about a minute after it's sent.
-     It holds top-tier armour, an M4 with an ACOG and suppressor, an SVD with a PSO, ammo and
-     morphine. The crate shows on the map.
+     It holds top-tier armour, an M16-A2 with a suppressor and a 60-round magazine, a DMR with
+     an ACOG and a 20-round magazine, their ammo, a frag grenade and morphine. The crate shows on the map.
    - A player who dies or leaves is out. Notifications announce who is out and how many are left.
 5. **End.** When one player is left, everyone is told who won and who was the last one out.
    With only one player in the round, it ends when that player dies. After 15 s everything
@@ -97,11 +102,13 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
 
 | Chance | What |
 |---|---|
-| 25% | A gun with a magazine in it and 3 boxes of its ammo: AKM, M4A1, MP5K, SVD or Saiga |
+| 25% | A loaded gun (a full magazine in it, or its internal magazine and chambers full) and 3 boxes of its ammo. Two per calibre: 9 mm Mlock-91 and SG5-K; .45 FX-45 and USG-45; .357 Revolver and Repeater Carbine; .308 M70 Tundra and DMR; 12 gauge BK-43 and R12; 7.62×39 KA-M and SK 59/66; 5.56×45 M16-A2 and KA-101 |
 | 30% | A helmet, vest or backpack (10% each), in one of three tiers (60/30/10%): Ssh68 / Ballistic / Gorka helmet; Police / Press / Plate carrier vest; Child / Taloon / Alice bag |
-| 15% | An attachment: ACOG, reflex, Kobra or PSO-1 sight, M4 or AK suppressor, 60-round STANAG or 75-round AK drum |
-| 18% | A bandage, or morphine (one time in three) |
-| 12% | A jerry can, half full. Cars start with 15% of a tank |
+| 10% | An attachment that fits one of the guns: Mini Sights, Baraka, ACOG, Combat Sights or hunting scope; pistol, Standardized or Normalized suppressor; 60-round STANAG, 75-round KA-M drum or 20-round DMR magazine. Sights and suppressors ignore NATO and Soviet mounts: the ACOG, Baraka and Combat Sights go on the KA-M and KA-101 too, and both rifle suppressors fit the M4 and AK muzzles and the DMR and SK 59/66 |
+| 6% | A frag grenade (M67 or RGD-5) |
+| 6% | A molotov (the Molotov mod) and a box of matches to light it |
+| 14% | A bandage, or morphine (one time in three) |
+| 9% | A jerry can, half full. Vehicles start with 15% of a tank |
 
 ## Layout
 
@@ -144,8 +151,14 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
 **Mods it needs:**
 - From Expansion (the planes, supply drops, the map on M, server markers, notifications):
   CF, Dabs Framework, DayZ-Expansion-Licensed, -Core, -Navigation and -Missions.
+- DayZ-Expansion-Vehicles, for the Land Rover.
 - FlyingWithoutCTD: it keeps the view distance capped while on the server, since high up
   the game has far more to stream in and freezes.
+- Molotov, and Better Explosions, which it needs: fuelled vehicles caught in fire or
+  explosions blow up into wrecks. Better Explosions - Expansion Vehicles gives the Land Rover
+  its wreck too. The round's clean-up removes the wrecks, the parts thrown off and the fires
+  (`BR_Leftovers.c`). A building a molotov burns down stays a ruin until the server restarts,
+  as the Molotov mod intends.
 
 The full list is in `mission/mods.txt`.
 
@@ -166,7 +179,9 @@ tools/run_client.sh battleroyale   # client with the same mods, connects to 127.
 
 What the headless test checks:
 - every loot class exists
-- loot spawns in buildings, and every gun has a magazine in it
+- loot spawns in buildings
+- every gun comes loaded (each one spawned once), and which attachments fit which guns
+- one of each vehicle: its parts, fuel and that it's not ruined
 - cars spawn with 15% fuel
 - the kit, on a character who still has a loaded gun in hand and a full bag
 - where the next circle goes

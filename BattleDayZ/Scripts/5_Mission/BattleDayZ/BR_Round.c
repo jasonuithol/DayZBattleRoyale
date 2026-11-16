@@ -319,7 +319,7 @@ class BR_Round
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
 		int items = m_Spawned.Count();
-		int cars = BR_Loot.Cars(m_Spots, m_Center, m_Radius, m_Settings.cars, m_Settings.carFuel, m_Spawned);
+		int cars = BR_Loot.Cars(m_Spots, m_Center, m_Radius, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
 		m_Prepared = true;
 		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
 		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, put out over " + seconds + " s");
@@ -359,6 +359,7 @@ class BR_Round
 			m_InPlane.Set(id, player);
 		}
 		m_Started = players.Count();
+		BR_Leftovers.s_On = true;
 		m_Winner = "";
 		m_LastOut = "";
 
@@ -740,6 +741,10 @@ class BR_Round
 		}
 		m_Spawned.Clear();
 		int drops = BR_Loot.ClearSupplyDrops();
+		BR_Leftovers.s_On = false;
+		int leftovers = BR_Leftovers.Clear();
+		if (leftovers > 0)
+			Print("[BattleDayZ] cleaned up " + leftovers + " wrecks, wreck parts and fires");
 		m_Alive.Clear();
 		ClearMarkers();
 		if (count + drops > 0)
@@ -863,9 +868,38 @@ class BR_Round
 		m_Radius = 1500;
 		int buildings = BR_Loot.Buildings(m_Spots, m_Center, m_Radius, 300, m_Spawned);
 		int items = m_Spawned.Count();
-		int cars = BR_Loot.Cars(m_Spots, m_Center, 4000, 10, m_Settings.carFuel, m_Spawned);
+		int cars = BR_Loot.Cars(m_Spots, m_Center, 4000, 10, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
 		for (int c = items; c < m_Spawned.Count(); c++)
 			m_TestCars.Insert(m_Spawned[c]);
+		// every vehicle class in the list exists, and one of each vehicle stands near the lobby
+		int noSuchVehicle = 0;
+		foreach (string entry : m_Settings.vehicles)
+		{
+			array<string> names = new array<string>();
+			entry.Split("|", names);
+			foreach (string vname : names)
+			{
+				if (!GetGame().ConfigIsExisting("CfgVehicles " + vname))
+				{
+					Print("[BRTest] no such vehicle: " + vname);
+					noSuchVehicle++;
+				}
+			}
+		}
+		Print("[BRTest] vehicles: " + m_Settings.vehicles.Count() + " in the list, " + noSuchVehicle + " unknown classes");
+		for (int v = 0; v < m_Settings.vehicles.Count(); v++)
+		{
+			array<string> colours = new array<string>();
+			m_Settings.vehicles[v].Split("|", colours);
+			vector at = LobbySpot() + Vector(20 + v * 12, 0, 25);
+			at[1] = GetGame().SurfaceY(at[0], at[2]) + 0.3;
+			EntityAI one = BR_Loot.Vehicle(colours[0], at, 0, m_Settings.carFuel);
+			if (one)
+			{
+				m_Spawned.Insert(one);
+				m_TestCars.Insert(one);
+			}
+		}
 		Print("[BRTest] loot in " + buildings + " buildings (" + items + " things), " + cars + " cars near " + m_Center);
 
 		// what the piles came out as, roughly: guns with a magazine in them
@@ -908,6 +942,7 @@ class BR_Round
 		m_Revealed = false;
 		SelfTestCircles();
 		SelfTestHits();
+		SelfTestGuns();
 
 		// the plane over the whole-map circle
 		vector mapCenter = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
@@ -1002,17 +1037,84 @@ class BR_Round
 		}
 	}
 
+	// every gun comes loaded, and which attachments (candidates for the loot) fit which guns
+	void SelfTestGuns()
+	{
+		BR_Loot.Init();
+		array<Weapon_Base> guns = new array<Weapon_Base>();
+		for (int g = 0; g < BR_Loot.s_Weapons.Count(); g++)
+		{
+			BR_Weapon w = BR_Loot.s_Weapons[g];
+			int before = m_Spawned.Count();
+			BR_Loot.WeaponPile(w, LobbySpot() + Vector(-20 - g * 2, 0, -20), m_Spawned);
+			Weapon_Base gun = null;
+			if (before < m_Spawned.Count())
+				gun = Weapon_Base.Cast(m_Spawned[before]);
+			if (!gun)
+			{
+				Print("[BRTest] gun " + w.weapon + ": NOT created");
+				continue;
+			}
+			guns.Insert(gun);
+			int mu = gun.GetCurrentMuzzle();
+			int rounds = gun.GetInternalMagazineCartridgeCount(mu);
+			for (int ch = 0; ch < gun.GetMuzzleCount(); ch++)
+			{
+				if (!gun.IsChamberEmpty(ch))
+					rounds++;
+			}
+			Magazine mag = gun.GetMagazine(mu);
+			if (mag)
+				rounds += mag.GetAmmoCount();
+			Print("[BRTest] gun " + w.weapon + ": " + rounds + " rounds loaded, magazine " + mag + ", " + (m_Spawned.Count() - before - 1) + " ammo boxes");
+		}
+		array<string> candidates = {"ACOGOptic", "ReflexOptic", "M68Optic", "KobraOptic", "PSO1Optic", "HuntingOptic", "M4_CarryHandleOptic", "FNP45_MRDSOptic", "PistolSuppressor", "M4_Suppressor", "AK_Suppressor", "Mag_STANAG_60Rnd", "Mag_AKM_Drum75Rnd", "Mag_M14_20Rnd", "Mag_Glock_15Rnd", "Mag_AK101_30Rnd", "UniversalLight", "TLRLight"};
+		foreach (string c : candidates)
+		{
+			EntityAI part = EntityAI.Cast(GetGame().CreateObject(c, LobbySpot() + "0 0 -30"));
+			if (!part)
+			{
+				Print("[BRTest] fits " + c + ": no such item");
+				continue;
+			}
+			string fits = "";
+			foreach (Weapon_Base fg : guns)
+			{
+				bool ok = fg.GetInventory().CanAddAttachment(part);
+				if (!ok && Magazine.Cast(part))
+				{
+					TStringArray mags = new TStringArray();
+					GetGame().ConfigGetTextArray("CfgWeapons " + fg.GetType() + " magazines", mags);
+					ok = mags.Find(c) >= 0;
+				}
+				if (ok)
+					fits += " " + fg.GetType();
+			}
+			BR_Loot.WithBattery(part);
+			string battery = "";
+			if (part.GetInventory().AttachmentCount() > 0)
+				battery = " (with a battery)";
+			Print("[BRTest] fits " + c + battery + ":" + fits);
+			GetGame().ObjectDelete(part);
+		}
+	}
+
 	void SelfTestFinish()
 	{
 		SelfTestKitCheck();
 		int fuelled = 0;
 		for (int c = 0; c < m_TestCars.Count(); c++)
 		{
-			CarScript car = CarScript.Cast(m_TestCars[c]);
+			EntityAI car = EntityAI.Cast(m_TestCars[c]);
 			if (!car)
 				continue;
-			Print("[BRTest] " + car.GetType() + " fuel " + car.GetFluidFraction(CarFluid.FUEL) + " at " + car.GetPosition());
-			if (car.GetFluidFraction(CarFluid.FUEL) > 0.05 && car.GetFluidFraction(CarFluid.FUEL) < 0.3)
+			float fuel = -1;
+			if (CarScript.Cast(car))
+				fuel = CarScript.Cast(car).GetFluidFraction(CarFluid.FUEL);
+			else if (MotorbikeScript.Cast(car))
+				fuel = MotorbikeScript.Cast(car).GetFluidFraction(MotorbikeFluid.FUEL);
+			Print("[BRTest] " + car.GetType() + " fuel " + fuel + ", " + car.GetInventory().AttachmentCount() + " parts fitted, ruined " + car.IsRuined() + ", lifetime " + car.GetLifetime() + " s at " + car.GetPosition());
+			if (fuel > 0.05 && fuel < 0.3)
 				fuelled++;
 		}
 		Print("[BRTest] " + fuelled + " of " + m_TestCars.Count() + " cars with a little fuel (" + m_Settings.carFuel + ")");
@@ -1028,7 +1130,15 @@ class BR_Round
 		Print("[BRTest] chute: now " + BR_ChuteCommand.HeightAboveGround(m_TestBody.GetPosition()) + " m above the ground, still chuting " + m_TestBody.BR_IsChuting() + ", command " + m_TestBody.GetCommand_Script() + ", alive " + m_TestBody.IsAlive() + ", health " + m_TestBody.GetHealth("", ""));
 		array<EntityAI> carried = new array<EntityAI>();
 		m_TestBody.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, carried);
-		Print("[BRTest] kit: " + m_TestBody.GetInventory().AttachmentCount() + " worn, " + (carried.Count() - 1) + " items in all (4 expected), in hands: " + m_TestBody.GetHumanInventory().GetEntityInHands() + ", health " + m_TestBody.GetHealth("", ""));
+		string belt = "no belt";
+		EntityAI worn = m_TestBody.FindAttachmentBySlotName("Hips");
+		if (worn)
+		{
+			belt = worn.GetType() + " with";
+			for (int a = 0; a < worn.GetInventory().AttachmentCount(); a++)
+				belt += " " + worn.GetInventory().GetAttachmentFromIndex(a).GetType();
+		}
+		Print("[BRTest] kit: " + m_TestBody.GetInventory().AttachmentCount() + " worn, " + (carried.Count() - 1) + " items in all (6 expected), " + belt + ", in hands: " + m_TestBody.GetHumanInventory().GetEntityInHands() + ", health " + m_TestBody.GetHealth("", ""));
 	}
 
 	void SelfTestGone()

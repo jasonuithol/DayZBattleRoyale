@@ -8,7 +8,7 @@
     "startRadius": 8000,
     "circleDrift": 0.5,
     "lootBuildings": 6000,
-    "cars": 40,
+    "cars": 100,
     "carFuel": 0.15,
     "supplyDropSeconds": 240,
     "planeSpeed": 120,
