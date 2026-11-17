@@ -43,12 +43,16 @@ modded class MissionGameplay
 		if (m_BR_Root)
 			m_BR_Root.Unlink();
 		m_BR_Root = null;
+		BR_ClientLobby.Clear(); // this game's own lobby goes with the connection
+		BR_PlaneSound.Stop();
 		super.OnMissionFinish();
 	}
 
 	override void OnUpdate(float timeslice)
 	{
 		super.OnUpdate(timeslice);
+		BR_ClientLobby.Update();
+		BR_PlaneSound.Update();
 		BR_UpdateHud();
 		BR_Heartbeat();
 	}
@@ -156,21 +160,22 @@ modded class MissionGameplay
 		}
 	}
 
-	// F on the plane jumps, F in free fall opens the chute (not while typing in chat or in a
-	// menu); at most once a second while the server catches up. KeyState remembers a press
+	// F in the lobby says ready to start, F on the plane jumps, F in free fall opens the chute
+	// (not while typing in chat or in a menu); at most once a second while the server catches up. KeyState remembers a press
 	// until it's cleared, so it's cleared every time it's read.
 	protected void BR_JumpKey(BR_State state, bool falling)
 	{
 		bool pressed = KeyState(KeyCode.KC_F) != 0;
 		if (pressed)
 			ClearKey(KeyCode.KC_F);
-		if (!pressed || !(state.inPlane || falling) || GetGame().GetUIManager().GetMenu())
+		bool lobby = state.phase == BR_Phase.LOBBY && !state.inRound;
+		if (!pressed || !(state.inPlane || falling || lobby) || GetGame().GetUIManager().GetMenu())
 			return;
 		float now = GetGame().GetTickTime();
 		if (now - m_BR_JumpAsked < 1)
 			return;
 		m_BR_JumpAsked = now;
-		Print("[BattleDayZ] F: in the plane " + state.inPlane + ", falling " + falling);
+		Print("[BattleDayZ] F: in the lobby " + lobby + ", in the plane " + state.inPlane + ", falling " + falling);
 		BR_Client.RequestJump(BR_SeenPlane());
 	}
 

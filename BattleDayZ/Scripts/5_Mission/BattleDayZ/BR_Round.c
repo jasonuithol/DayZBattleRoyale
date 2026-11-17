@@ -35,9 +35,16 @@ class BR_Round
 	protected ref BR_Map m_Map;           // what's particular to this map (BR_Maps.c)
 	protected ref array<string> m_LobbyNames = new array<string>();
 	protected int m_SkyNext;              // index into m_LobbyNames of the one after this
-	protected int m_SkySlot;              // the two places in the sky they take turns at, 0 or 1
+	protected int m_SkySlot;              // which of the SKY_SLOTS places in the sky the lobby is at
+	protected ref map<string, ref array<float>> m_Falls = new map<string, ref array<float>>(); // player id -> when they were caught falling
+	protected ref set<string> m_Grounded = new set<string>();  // players waiting on the ground instead
+	protected ref set<string> m_Ready = new set<string>();     // players in the lobby who pressed F: start now
 	protected float m_SkySince;
-	static const float SKY_SLOT_APART = 300; // m between the two places
+	static const int SKY_SLOTS = 4;          // places in a row the lobbies take in turn, so one isn't built
+	                                         // where another was taken down only a round before
+	static const float SKY_SLOT_APART = 600; // m between them (players' games clear 250 m round the others)
+	static const int FALLS_TO_GROUND = 3;    // caught falling this often in FALLS_WINDOW s: on the ground instead
+	static const float FALLS_WINDOW = 60;
 	static const int SKY_TAKE_DOWN_MS = 5000; // the old one comes down this long after everyone's moved
 	protected float m_MinX, m_MaxX, m_MinZ, m_MaxZ; // where the buildings are
 
@@ -188,6 +195,17 @@ class BR_Round
 		if (m_Phase == BR_Phase.LOBBY && m_Settings.lobbyChangeSeconds > 0 && now - m_SkySince >= m_Settings.lobbyChangeSeconds && now < m_PhaseEnds - 10)
 			ChangeLobby();
 
+		// everyone waiting has pressed F: no need to wait out the clock
+		if (m_Phase == BR_Phase.LOBBY && now < m_PhaseEnds)
+		{
+			array<PlayerBase> waitingNow = LobbyPlayers(men);
+			if (waitingNow.Count() > 0 && waitingNow.Count() >= m_Settings.minPlayers && ReadyCount(waitingNow) == waitingNow.Count())
+			{
+				m_PhaseEnds = now;
+				Print("[BattleDayZ] everyone waiting is ready (" + waitingNow.Count() + "): starting");
+			}
+		}
+
 		if (m_Phase == BR_Phase.LOBBY && now >= m_PhaseEnds)
 		{
 			int waiting = LobbyPlayers(men).Count();
@@ -207,6 +225,17 @@ class BR_Round
 		}
 
 		Broadcast(men, now);
+	}
+
+	int ReadyCount(array<PlayerBase> players)
+	{
+		int ready = 0;
+		foreach (PlayerBase p : players)
+		{
+			if (p.GetIdentity() && m_Ready.Find(p.GetIdentity().GetId()) >= 0)
+				ready++;
+		}
+		return ready;
 	}
 
 	bool InRound(PlayerBase player)
@@ -250,11 +279,48 @@ class BR_Round
 	void KeepInLobby(PlayerBase player)
 	{
 		player.SetAllowDamage(false);
-		bool strayed = BR_Loot.Distance2D(player.GetPosition(), m_Lobby) > LOBBY_LEASH;
-		if (m_Sky)
-			strayed = m_Sky.Strayed(player.GetPosition());
-		if (strayed)
-			player.SetPosition(LobbySpot());
+		string id = "";
+		string who = "a test body";
+		if (player.GetIdentity())
+		{
+			id = player.GetIdentity().GetId();
+			who = player.GetIdentity().GetName();
+		}
+		vector pos = player.GetPosition();
+		if (!m_Sky || m_Grounded.Find(id) >= 0)
+		{
+			if (BR_Loot.Distance2D(pos, m_Lobby) > LOBBY_LEASH || pos[1] < GetGame().SurfaceY(pos[0], pos[2]) - 5)
+				player.SetPosition(GroundSpot());
+			return;
+		}
+		if (!m_Sky.Strayed(pos))
+			return;
+		// fallen through, not just walked off: a game that can't stand on the floor (it has an
+		// old lobby's models in the way, say) would fall again and again: after a few, it waits
+		// on the ground under the lobby instead, until the next round
+		if (BR_Loot.Distance2D(pos, m_Sky.m_Origin) <= m_Sky.m_Leash)
+		{
+			array<float> falls;
+			if (!m_Falls.Find(id, falls))
+			{
+				falls = new array<float>();
+				m_Falls.Set(id, falls);
+			}
+			float now = Now();
+			falls.Insert(now);
+			while (falls.Count() > 0 && now - falls[0] > FALLS_WINDOW)
+				falls.Remove(0);
+			Print("[BattleDayZ] " + who + " fell through the lobby (" + falls.Count() + " in " + FALLS_WINDOW + " s), " + (pos[1] - m_Sky.m_Origin[1]) + " m below it");
+			if (falls.Count() >= FALLS_TO_GROUND)
+			{
+				m_Grounded.Insert(id);
+				falls.Clear();
+				player.SetPosition(GroundSpot());
+				Print("[BattleDayZ] " + who + " keeps falling through the lobby: waiting on the ground under it instead");
+				return;
+			}
+		}
+		player.SetPosition(LobbySpot());
 	}
 
 	// the flattest dry ground within 1.5 km of x, z: the lobby needs room to stand around
@@ -306,7 +372,7 @@ class BR_Round
 		{
 			string name = m_LobbyNames[m_SkyNext];
 			m_SkyNext = (m_SkyNext + 1) % count;
-			int slot = 1 - m_SkySlot;
+			int slot = (m_SkySlot + 1) % SKY_SLOTS;
 			next = BR_SkyLobby.Build(name, m_Lobby + Vector(slot * SKY_SLOT_APART, m_Settings.lobbyHeight, 0), m_Map);
 			if (next)
 				m_SkySlot = slot;
@@ -417,15 +483,19 @@ class BR_Round
 		// the vehicles go all over the map, the corners and edges outside the first circle too
 		float world = GetGame().GetWorld().GetWorldSize();
 		int cars = BR_Loot.Cars(m_Spots, Vector(world / 2, 0, world / 2), world, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned, m_Settings.carSquare, m_Lobby);
+		int boats = BR_Loot.Boats(m_Spots, m_Settings.boats, m_Settings.carFuel, m_Settings.boatTypes, m_Spawned);
 		m_Prepared = true;
 		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
-		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, put out over " + seconds + " s");
+		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, " + boats + " boats, put out over " + seconds + " s");
 	}
 
 	// --- starting a round: everyone in the lobby onto the plane ------------------------
 
 	void StartRound(array<Man> men)
 	{
+		m_Grounded.Clear(); // back up in the sky next time
+		m_Ready.Clear();
+		m_Falls.Clear();
 		m_Round++;
 
 		// noon, every round
@@ -552,9 +622,15 @@ class BR_Round
 		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");
 	}
 
-	// F: out of the plane, or (falling) open the chute
+	// F: in the lobby, ready to start; out of the plane; or (falling) open the chute
 	void OnJump(PlayerIdentity sender, vector seenPlane)
 	{
+		if (m_Phase == BR_Phase.LOBBY && sender && m_Ready.Find(sender.GetId()) < 0)
+		{
+			m_Ready.Insert(sender.GetId());
+			Print("[BattleDayZ] " + sender.GetName() + " is ready");
+			return;
+		}
 		if (m_Phase != BR_Phase.GAME || !sender)
 			return;
 		PlayerBase player;
@@ -871,11 +947,12 @@ class BR_Round
 		string title, subtitle;
 		if (m_Phase == BR_Phase.LOBBY)
 		{
-			int waiting = LobbyPlayers(men).Count();
+			array<PlayerBase> lobbyNow = LobbyPlayers(men);
+			int waiting = lobbyNow.Count();
 			title = "Next round in " + Clock(m_PhaseEnds - now);
 			if (now >= m_PhaseEnds && !m_Prepared)
 				title = "Getting the map ready...";
-			subtitle = waiting.ToString() + " waiting";
+			subtitle = waiting.ToString() + " waiting, " + ReadyCount(lobbyNow) + " ready";
 			if (waiting < m_Settings.minPlayers)
 				subtitle = subtitle + " (" + m_Settings.minPlayers + " needed)";
 		}
@@ -927,6 +1004,16 @@ class BR_Round
 		{
 			state.lobbyAt = m_Sky.m_Origin;
 			state.lobbyReach = m_Sky.Reach();
+			if (m_Sky.m_Spec)
+			{
+				state.lobbyX = m_Sky.m_Spec.x;
+				state.lobbyZ = m_Sky.m_Spec.z;
+				state.lobbyRadius = m_Sky.m_Spec.radius;
+				state.lobbyFloorY = m_Sky.m_Spec.floorY;
+			}
+			state.lobbySlot0 = m_Lobby + Vector(0, m_Settings.lobbyHeight, 0);
+			state.lobbySlots = SKY_SLOTS;
+			state.lobbyApart = SKY_SLOT_APART;
 		}
 
 		for (int i = 0; i < men.Count(); i++)
@@ -939,6 +1026,13 @@ class BR_Round
 			state.subtitle = subtitle;
 			if (state.inPlane)
 				state.subtitle = planeLine;
+			else if (m_Phase == BR_Phase.LOBBY && !state.inRound)
+			{
+				if (m_Ready.Find(player.GetIdentity().GetId()) >= 0)
+					state.subtitle = subtitle + ": you're ready";
+				else
+					state.subtitle = subtitle + ": press F when you're ready to start";
+			}
 			ScriptRPC rpc = new ScriptRPC();
 			state.Write(rpc);
 			rpc.Send(null, BR_State.RPC, false, player.GetIdentity());
@@ -971,6 +1065,8 @@ class BR_Round
 		int buildings = BR_Loot.Buildings(m_Spots, m_Center, m_Radius, 300, m_Spawned);
 		int items = m_Spawned.Count();
 		int cars = BR_Loot.Cars(m_Spots, m_Center, 4000, 10, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
+		int boatsMade = BR_Loot.Boats(m_Spots, Math.Min(m_Settings.boats, 3), m_Settings.carFuel, m_Settings.boatTypes, m_Spawned);
+		Print("[BRTest] boats: " + boatsMade + " of " + Math.Min(m_Settings.boats, 3) + " (" + m_Spots.boats.Count() + " boat spots on the map)");
 		for (int c = items; c < m_Spawned.Count(); c++)
 			m_TestCars.Insert(m_Spawned[c]);
 		// every vehicle class in the list exists, and one of each vehicle stands near the lobby
@@ -1215,14 +1311,96 @@ class BR_Round
 	{
 		if (m_SkyFaller)
 			Print("[BRTest] sky lobby: 3 s after being put back, " + (m_SkyFaller.GetPosition() - m_Sky.m_Origin) + ", strayed " + m_Sky.Strayed(m_SkyFaller.GetPosition()));
+		// a game that keeps falling through: caught three times under the floor, it's put on the ground
+		PlayerBase sinker = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Mirek", m_Sky.m_Origin + "2 -40 2", false, true));
+		if (sinker)
+		{
+			m_Spawned.Insert(sinker);
+			for (int f = 0; f < FALLS_TO_GROUND; f++)
+			{
+				sinker.SetPosition(m_Sky.m_Origin + "2 -40 2");
+				KeepInLobby(sinker);
+			}
+			vector sunk = sinker.GetPosition();
+			Print("[BRTest] sky lobby: fell through " + FALLS_TO_GROUND + " times, now " + (sunk[1] - GetGame().SurfaceY(sunk[0], sunk[2])) + " m above the ground, " + BR_Loot.Distance2D(sunk, m_Lobby) + " m from the lobby's ground");
+			m_Grounded.Clear();
+		}
 		string before = m_Sky.m_Title;
 		ChangeLobby();
 		Print("[BRTest] sky lobby change: " + before + " -> " + m_Sky.m_Title + " (" + m_Sky.m_Built.Count() + " pieces, " + m_Sky.m_Failed + " failed, worst miss " + m_Sky.m_WorstMiss + " m) at " + m_Sky.m_Origin);
 	}
 
+	// deletes happen at the end of the frame: count what's left a moment later
+	void SelfTestRefillAfter(PlayerBase gunner, Magazine mag, int had, int added, bool found)
+	{
+		array<EntityAI> items = new array<EntityAI>();
+		gunner.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+		int boxes = 0;
+		int loose = 0;
+		foreach (EntityAI item : items)
+		{
+			if (item.GetType() == "AmmoBox_762x39_20Rnd")
+				boxes++;
+			Magazine pile = Magazine.Cast(item);
+			if (pile && pile.IsAmmoPile())
+				loose += pile.GetAmmoCount();
+		}
+		Print("[BRTest] refill: found the magazine " + found + ", " + had + " rounds to hand (10 loose, 2 boxes of 20), " + added + " added: magazine " + mag.GetAmmoCount() + "/" + mag.GetAmmoMax() + " (30 expected), " + boxes + " boxes left (1 expected), " + loose + " loose rounds left (5 expected)");
+	}
+
 	// what a hit of each candidate kind does to a fresh character (for the storm's cuts)
 	void SelfTestHits()
 	{
+		// reload refills the magazine from loose rounds and unopened boxes
+		PlayerBase gunner = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Mirek", GroundSpot() + "3 0 9", false, true));
+		if (gunner)
+		{
+			m_Spawned.Insert(gunner);
+			Weapon_Base akm = Weapon_Base.Cast(gunner.GetHumanInventory().CreateInHands("AKM"));
+			EntityAI bag = gunner.GetInventory().CreateInInventory("TaloonBag_Blue");
+			if (akm && bag)
+			{
+				Magazine mag = Magazine.Cast(akm.GetInventory().CreateAttachment("Mag_AKM_30Rnd"));
+				if (mag)
+				{
+					mag.ServerSetAmmoCount(5);
+					Magazine loose = Magazine.Cast(bag.GetInventory().CreateInInventory("Ammo_762x39"));
+					if (loose)
+						loose.ServerSetAmmoCount(10);
+					bag.GetInventory().CreateInInventory("AmmoBox_762x39_20Rnd");
+					bag.GetInventory().CreateInInventory("AmmoBox_762x39_20Rnd");
+					int had = BR_Refill.Available(gunner, mag);
+					Weapon_Base held;
+					Magazine topped = BR_Refill.Topped(gunner, held);
+					int added = BR_Refill.Refill(gunner, mag);
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestRefillAfter, 500, false, gunner, mag, had, added, topped != null);
+				}
+				else
+					Print("[BRTest] refill: no magazine on the AKM");
+			}
+		}
+
+		// adrenaline heals fully, and stamina doesn't run down
+		PlayerBase hurt = PlayerBase.Cast(GetGame().CreateObject("SurvivorM_Mirek", GroundSpot() + "0 0 9", false, true));
+		if (hurt)
+		{
+			m_Spawned.Insert(hurt);
+			hurt.SetHealth("", "", 30);
+			hurt.SetHealth("GlobalHealth", "Blood", 3000);
+			float before = hurt.GetHealth("", "");
+			EntityAI epi = hurt.GetInventory().CreateInInventory("Epinephrine");
+			Epinephrine shot = Epinephrine.Cast(epi);
+			if (shot)
+				shot.OnApply(hurt);
+			Print("[BRTest] epinephrine: health " + before + " -> " + hurt.GetHealth("", "") + " of " + hurt.GetMaxHealth("", "") + ", blood " + hurt.GetHealth("GlobalHealth", "Blood"));
+			StaminaHandler stamina = hurt.GetStaminaHandler();
+			if (stamina)
+			{
+				float full = stamina.GetStamina();
+				stamina.DepleteStamina(EStaminaModifiers.JUMP);
+				Print("[BRTest] stamina: " + full + " -> " + stamina.GetStamina() + " after a jump (should stay)");
+			}
+		}
 		array<string> ammo = {"MeleeZombie", "MeleeKnife", "TripWireHit", "MeleeWolf"};
 		for (int i = 0; i < ammo.Count(); i++)
 		{
@@ -1380,6 +1558,8 @@ class BR_Round
 				fuel = CarScript.Cast(car).GetFluidFraction(CarFluid.FUEL);
 			else if (MotorbikeScript.Cast(car))
 				fuel = MotorbikeScript.Cast(car).GetFluidFraction(MotorbikeFluid.FUEL);
+			else if (BoatScript.Cast(car))
+				fuel = BoatScript.Cast(car).GetFluidFraction(BoatFluid.FUEL);
 			Print("[BRTest] " + car.GetType() + " fuel " + fuel + ", " + car.GetInventory().AttachmentCount() + " parts fitted, ruined " + car.IsRuined() + ", lifetime " + car.GetLifetime() + " s at " + car.GetPosition());
 			if (fuel > 0.05 && fuel < 0.3)
 				fuelled++;
@@ -1405,7 +1585,7 @@ class BR_Round
 			for (int a = 0; a < worn.GetInventory().AttachmentCount(); a++)
 				belt += " " + worn.GetInventory().GetAttachmentFromIndex(a).GetType();
 		}
-		Print("[BRTest] kit: " + m_TestBody.GetInventory().AttachmentCount() + " worn, " + (carried.Count() - 1) + " items in all (6 expected), " + belt + ", in hands: " + m_TestBody.GetHumanInventory().GetEntityInHands() + ", health " + m_TestBody.GetHealth("", ""));
+		Print("[BRTest] kit: " + m_TestBody.GetInventory().AttachmentCount() + " worn, " + (carried.Count() - 1) + " items in all (7 expected), " + belt + ", in hands: " + m_TestBody.GetHumanInventory().GetEntityInHands() + ", health " + m_TestBody.GetHealth("", ""));
 	}
 
 	void SelfTestGone()

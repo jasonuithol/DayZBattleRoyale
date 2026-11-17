@@ -4,11 +4,16 @@
 //   - a file in the mission's lobbies folder (tools/make_lobby.py), for a place from another
 //     map: every object with its model and transform, and the floor
 // "lobbies" in battleroyale.json lists the ones to take turns, the next after every round
-// (empty: all of the map's own). Only one is up at a time; the clients take the old one down
-// themselves (BR_LobbyGhosts), since a server can't take back a static model it has sent.
+// (empty: all of the map's own). Only one is up at a time.
 //
-// Buildings with a Land_ class go up as that class (doors and ladders work), everything else
-// straight from its model. Both kinds are sent to every game that joins.
+// A place on the map is built twice: the server's copy (players stand on it there, and it
+// picks where they appear) and each player's own (BR_ClientLobby, from the place and where
+// it goes, in the state the server sends every second): the same objects copied the same way
+// from the same map. Their models are local to each, never sent: a static model a server sends
+// stays with every game that comes near it again even after the server deletes it. Buildings
+// with a Land_ class are the exception: the server makes them as real (networked) buildings,
+// so doors and ladders work, and deleting those does reach every game. A lobby from a file is
+// all the server's and sent (the players' games don't have the file).
 
 class BR_LobbyPiece
 {
@@ -51,6 +56,9 @@ class BR_SkyLobby
 	int m_Failed;
 	float m_WorstMiss;                     // m between where a piece should be and where it is
 	string m_FloorSize;
+	ref BR_LobbySpec m_Spec;               // the place on the map it's a copy of (null: from a file)
+	protected bool m_Local;                // its models are local, not sent
+	protected bool m_Client;               // a player's own copy: no buildings (the server's come)
 
 	// the map's own place of that name, or else the mission's file of that name
 	static BR_SkyLobby Build(string name, vector origin, BR_Map profile)
@@ -65,6 +73,8 @@ class BR_SkyLobby
 				return null;
 			BR_SkyLobby live = new BR_SkyLobby();
 			live.m_Name = name;
+			live.m_Spec = spec;
+			live.m_Local = true;
 			live.Make(copy, origin);
 			return live;
 		}
@@ -85,6 +95,21 @@ class BR_SkyLobby
 		lobby.m_Name = name;
 		lobby.Make(file, origin);
 		return lobby;
+	}
+
+	// a player's own copy of the server's lobby (BR_ClientLobby): its models, the buildings
+	// come from the server
+	static BR_SkyLobby BuildLocal(BR_LobbySpec spec, vector origin)
+	{
+		BR_LobbyFile copy = Copy(spec);
+		if (!copy)
+			return null;
+		BR_SkyLobby own = new BR_SkyLobby();
+		own.m_Spec = spec;
+		own.m_Local = true;
+		own.m_Client = true;
+		own.Make(copy, origin);
+		return own;
 	}
 
 	// what stands at a place on this map, as a lobby: the same rules as tools/make_lobby.py.
@@ -228,6 +253,8 @@ class BR_SkyLobby
 		{
 			if (!piece.m || piece.m.Count() < 12)
 				continue;
+			if (m_Client && piece.cls != "" && !piece.floor)
+				continue; // a building: the server's comes
 			Object o = Place(piece);
 			if (!o)
 			{
@@ -236,7 +263,10 @@ class BR_SkyLobby
 			}
 			m_Built.Insert(o);
 		}
-		Print("[BattleDayZ] lobby in the sky: " + m_Title + " at " + m_Origin + ", " + m_Built.Count() + " pieces (" + m_Buildings + " buildings, " + m_Models + " models, " + m_Floor.Count() + " floor slabs), " + m_Failed + " failed, floor " + (m_Lowest - m_Origin[1]) + " to " + (m_Highest - m_Origin[1]) + " m, worst miss " + m_WorstMiss + " m");
+		string whose = "";
+		if (m_Client)
+			whose = " (this game's own copy)";
+		Print("[BattleDayZ] lobby in the sky" + whose + ": " + m_Title + " at " + m_Origin + ", " + m_Built.Count() + " pieces (" + m_Buildings + " buildings, " + m_Models + " models, " + m_Floor.Count() + " floor slabs), " + m_Failed + " failed, floor " + (m_Lowest - m_Origin[1]) + " to " + (m_Highest - m_Origin[1]) + " m, worst miss " + m_WorstMiss + " m");
 	}
 
 	protected Object Place(BR_LobbyPiece piece)
@@ -272,10 +302,10 @@ class BR_SkyLobby
 			}
 		}
 
-		// from the model: a server-only copy first, to see where the engine actually puts it
+		// from the model: a throwaway local copy first, to see where the engine actually puts it
 		// (it shifts a model from where it was asked) and, for a slab, where its top is; the
-		// real one then goes where that copy says. Clients only ever see where a static model
-		// was created, never a later move.
+		// real one then goes where that copy says. (A sent model is only ever seen where it was
+		// created, never moved.)
 		Object probe = GetGame().CreateStaticObjectUsingP3D(piece.p3d, want, ypr * Math.DEG2RAD, scale, true);
 		if (!probe)
 			return null;
@@ -291,7 +321,7 @@ class BR_SkyLobby
 			}
 		}
 		GetGame().ObjectDelete(probe);
-		Object o = GetGame().CreateStaticObjectUsingP3D(piece.p3d, target - shift, ypr * Math.DEG2RAD, scale);
+		Object o = GetGame().CreateStaticObjectUsingP3D(piece.p3d, target - shift, ypr * Math.DEG2RAD, scale, m_Local);
 		if (!o)
 			return null;
 		Missed(o, target);
@@ -311,8 +341,8 @@ class BR_SkyLobby
 		m_WorstMiss = Math.Max(m_WorstMiss, vector.Distance(o.GetPosition(), want));
 	}
 
-	// gone from the server (deletes happen at the end of the frame). The games connected to it
-	// keep the static models: they take them down themselves (BR_LobbyGhosts).
+	// gone (deletes happen at the end of the frame): the server's copy and its buildings, or a
+	// player's own copy
 	void Destroy()
 	{
 		foreach (Object o : m_Built)
@@ -440,5 +470,36 @@ class BR_SkyLobby
 	bool Strayed(vector p)
 	{
 		return BR_Loot.Distance2D(p, m_Origin) > m_Leash || p[1] < m_Lowest - FALL_LIMIT;
+	}
+}
+
+// A player's own copy of the lobby in the sky: built from the place and where it goes in the
+// server's state, rebuilt when that changes, gone when the game leaves the server.
+class BR_ClientLobby
+{
+	protected static ref BR_SkyLobby s_Lobby;
+	protected static vector s_At;
+
+	static void Update()
+	{
+		if (GetGame().IsServer())
+			return;
+		BR_State state = BR_Client.s_State;
+		if (!state || state.lobbyAt == vector.Zero || vector.Distance(state.lobbyAt, s_At) < 1)
+			return;
+		Clear();
+		s_At = state.lobbyAt;
+		if (state.lobbyRadius <= 0)
+			return; // a lobby from a file: the server sends it all
+		BR_LobbySpec spec = new BR_LobbySpec("", "", state.lobbyX, state.lobbyZ, state.lobbyRadius, state.lobbyFloorY);
+		s_Lobby = BR_SkyLobby.BuildLocal(spec, state.lobbyAt);
+	}
+
+	static void Clear()
+	{
+		if (s_Lobby)
+			s_Lobby.Destroy();
+		s_Lobby = null;
+		s_At = vector.Zero;
 	}
 }

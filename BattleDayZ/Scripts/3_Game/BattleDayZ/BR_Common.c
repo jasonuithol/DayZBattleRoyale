@@ -41,6 +41,13 @@ class BR_State
 	string subtitle;   // and the one under it
 	vector lobbyAt;    // the lobby in the sky (zero: none), and how far its pieces reach from
 	float lobbyReach;  // there: a client takes down the old one when it moves (BR_LobbyGhosts)
+	float lobbyX;      // the place on the map the lobby is a copy of, for each game to build its
+	float lobbyZ;      // own (lobbyRadius 0: a lobby from a file, all the server's)
+	float lobbyRadius;
+	float lobbyFloorY;
+	vector lobbySlot0; // the places a lobby goes: lobbySlots of them, lobbyApart m apart
+	int lobbySlots;    // along x from lobbySlot0; anything left at one but lobbyAt is an old one
+	float lobbyApart;
 
 	void Write(ParamsWriteContext ctx)
 	{
@@ -64,6 +71,13 @@ class BR_State
 		ctx.Write(subtitle);
 		ctx.Write(lobbyAt);
 		ctx.Write(lobbyReach);
+		ctx.Write(lobbyX);
+		ctx.Write(lobbyZ);
+		ctx.Write(lobbyRadius);
+		ctx.Write(lobbyFloorY);
+		ctx.Write(lobbySlot0);
+		ctx.Write(lobbySlots);
+		ctx.Write(lobbyApart);
 	}
 
 	bool Read(ParamsReadContext ctx)
@@ -76,7 +90,11 @@ class BR_State
 			return false;
 		if (!ctx.Read(title) || !ctx.Read(subtitle))
 			return false;
-		return ctx.Read(lobbyAt) && ctx.Read(lobbyReach);
+		if (!ctx.Read(lobbyAt) || !ctx.Read(lobbyReach))
+			return false;
+		if (!ctx.Read(lobbyX) || !ctx.Read(lobbyZ) || !ctx.Read(lobbyRadius) || !ctx.Read(lobbyFloorY))
+			return false;
+		return ctx.Read(lobbySlot0) && ctx.Read(lobbySlots) && ctx.Read(lobbyApart);
 	}
 
 	// horizontal distance from pos to the circle's edge; positive means outside
@@ -203,23 +221,29 @@ class BR_Steer
 	}
 }
 
-// Client: the lobby in the sky that's been taken down stays in this game (a server can't take
-// back a static model it sent), so when the lobby moves this game takes the old one down itself:
-// every plain static object round where it was, up there in the sky. Buildings (Land_ classes)
-// are entities the server deletes properly; they're only counted.
+// Client: a lobby in the sky that's been taken down stays in this game (a server can't take
+// back a static model it sent; a game that joins later can still be sent one, or keep one from
+// before it reconnected), so this game clears the other places a lobby goes itself: every plain
+// static object round them, up in the sky, whenever the lobby is somewhere new to it (the
+// first time it hears too). Buildings (Land_ classes) are entities the server deletes properly;
+// they're only counted.
 class BR_LobbyGhosts
 {
+	static const float REACH = 250; // m round each other place: they're 600 m apart
 	static vector s_At;
-	static float s_Reach;
 
-	static void Seen(vector at, float reach)
+	static void Seen(BR_State state)
 	{
-		if (at == vector.Zero)
+		vector at = state.lobbyAt;
+		if (at == vector.Zero || vector.Distance(at, s_At) < 1)
 			return;
-		if (s_At != vector.Zero && vector.Distance(at, s_At) > 1)
-			Clear(s_At, s_Reach);
 		s_At = at;
-		s_Reach = reach;
+		for (int i = 0; i < state.lobbySlots; i++)
+		{
+			vector slot = state.lobbySlot0 + Vector(i * state.lobbyApart, 0, 0);
+			if (vector.Distance(slot, at) > 1)
+				Clear(slot, REACH);
+		}
 	}
 
 	static void Clear(vector at, float reach)
@@ -264,7 +288,7 @@ modded class DayZGame
 				if (state.flying && !IsServer())
 					BR_Plane.Set(state.planePos, state.planeVel);
 				if (!IsServer())
-					BR_LobbyGhosts.Seen(state.lobbyAt, state.lobbyReach);
+					BR_LobbyGhosts.Seen(state);
 			}
 			return;
 		}

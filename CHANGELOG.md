@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.1 - 2026-11-17
+
+- **Old lobbies really go:** the lobby's models are no longer sent to players. A static model
+  a server sends stays with every game that comes near it again, even after the server deletes
+  it, so old lobbies kept reappearing, and a new one built where an old one had been could
+  leave players falling through. Now the server builds its own copy (players stand on it, it
+  picks where they appear) and each player's game builds the same copy itself, from the place
+  on the map and where it goes (sent in the state every second), and takes it down when the
+  lobby moves or the game leaves. Only its buildings (Land_ classes, real buildings with
+  doors) are still sent; deleting those reaches every game. A swap no longer sends 500 to 1,300
+  objects to every player either. The lobbies take 4 places in turn, 600 m apart.
+- **Falling through the lobby:** anyone caught falling through it 3 times in a minute waits
+  on the ground under it instead (still unhurt), until the next round. Each catch is logged.
+- **The plane's engine from take-off:** it played only once Expansion's plane reached a
+  player's game, a quarter or half the way across, and then at full volume right by the
+  camera. Now each player's game plays the engine itself from the moment they're on board,
+  at the plane and quieter, and Expansion's loop for that plane stays quiet meanwhile.
+- **Boats** on the maps with water: 12 a round on Chernarus and 5 on Livonia (`boats`, of
+  `boatTypes`), at random vanilla boat spots (72 and 17; `make_spots.py` keeps them now),
+  afloat, with a spark plug in and the same 15% of a tank as the cars. Nasdara has none.
+- **Ready with F:** the lobby lasts 3 minutes between rounds (`lobbySeconds` 180, was 60),
+  or until everyone waiting has pressed F to say they're ready. The second line shows how
+  many are waiting and ready, and tells each player whether they are.
+- **No stamina:** sprinting, jumping and climbing never tire (vanilla's own switch).
+- **Adrenaline heals, and the PO-X antidote:** epinephrine (adrenaline) keeps its vanilla
+  boost and also brings health back to 100% (every limb, blood and shock). Medical loot is
+  now a bandage half the time, else morphine, epinephrine or the PO-X antidote (for gas
+  poisoning), and supply drops carry an epinephrine.
+- **Reload refills the magazine:** with a magazine on the gun that isn't full and ammo for
+  it in the inventory, reload tops that magazine up instead of swapping in another: from
+  loose rounds first, then from boxes of rounds, used unopened (what's left of a box stays as
+  loose rounds). With no ammo for it, reload is vanilla's.
+- **Gloves in the kit:** everyone gets work gloves along with the rest of the plain kit.
+
 ## 0.4 - 2026-11-17
 
 - **The lobby is in the sky:** a copy of a real place on the map, floating 1 km up

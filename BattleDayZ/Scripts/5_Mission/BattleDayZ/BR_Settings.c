@@ -7,7 +7,7 @@ class BR_Settings
 
 	int minPlayers = 1;            // a round starts when the lobby countdown ends with at least this many
 	int firstLobbySeconds = 300;   // after a server start, so everyone can log in
-	int lobbySeconds = 60;         // between rounds
+	int lobbySeconds = 180;        // between rounds (or until everyone waiting has pressed F for ready)
 	int winnerSeconds = 15;        // the winner is shown this long before everyone goes back to the lobby
 	float lobbyX = 1000;           // the lobby: over a spot outside the map's playable area
 	float lobbyZ = 1000;
@@ -25,7 +25,9 @@ class BR_Settings
 	                               // spot in it, parked by a structure, or out in the open
 	ref array<string> vehicles;    // what spawns at the car spots, one entry per vehicle, equally likely:
 	                               // its colours as "A|B|C", one picked at random
-	float carFuel = 0.15;          // fraction of a full tank
+	float carFuel = 0.15;          // fraction of a full tank (boats too)
+	int boats = 0;                 // boats each round, at the map's vanilla boat spots (if it has any)
+	string boatTypes = "Boat_01_Orange|Boat_01_Blue|Boat_01_Black|Boat_01_Camo"; // one picked at random
 	int supplyDropSeconds = 240;   // a supply drop this often, inside the next circle (0: none)
 	float planeSpeed = 120;        // m/s: the plane crosses the first circle (about 15 km) in about 2 minutes
 	float planeHeight = 400;       // m above the highest ground under its route
@@ -129,6 +131,7 @@ class BR_Spots
 	ref array<ref BR_Proto> protos;
 	ref array<ref BR_Building> buildings;
 	ref array<ref BR_CarSpot> cars;
+	ref array<ref BR_CarSpot> boats;
 
 	static BR_Spots Load()
 	{
@@ -142,6 +145,8 @@ class BR_Spots
 			s.buildings = new array<ref BR_Building>();
 		if (!s.cars)
 			s.cars = new array<ref BR_CarSpot>();
+		if (!s.boats)
+			s.boats = new array<ref BR_CarSpot>();
 		return s;
 	}
 }

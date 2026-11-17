@@ -86,6 +86,8 @@ class BR_Loot
 		all.InsertAll(s_Attachments);
 		all.Insert("BandageDressing");
 		all.Insert("Morphine");
+		all.Insert("Epinephrine");
+		all.Insert("AntiChemInjector");
 		all.Insert("CanisterGasoline");
 		all.InsertAll(s_Grenades);
 		all.Insert("Molotov");
@@ -178,10 +180,17 @@ class BR_Loot
 		}
 		else if (roll < 91)
 		{
-			if (Math.RandomInt(0, 3) == 0)
-				Item("Morphine", pos, spawned);
-			else
+			// medical: a bandage half the time, else morphine, epinephrine (adrenaline, which
+			// heals fully: BR_Medical.c) or the PO-X antidote (gas poisoning)
+			int med = Math.RandomInt(0, 20);
+			if (med < 10)
 				Item("BandageDressing", pos, spawned);
+			else if (med < 14)
+				Item("Morphine", pos, spawned);
+			else if (med < 17)
+				Item("Epinephrine", pos, spawned);
+			else
+				Item("AntiChemInjector", pos, spawned);
 		}
 		else
 		{
@@ -625,6 +634,12 @@ class BR_Loot
 				bike.LeakAll(MotorbikeFluid.FUEL);
 				bike.Fill(MotorbikeFluid.FUEL, bike.GetFluidCapacity(MotorbikeFluid.FUEL) * fuel);
 			}
+			BoatScript boat = BoatScript.Cast(vehicle);
+			if (boat)
+			{
+				boat.LeakAll(BoatFluid.FUEL);
+				boat.Fill(BoatFluid.FUEL, boat.GetFluidCapacity(BoatFluid.FUEL) * fuel);
+			}
 		}
 		// last, after the parts and fluids (a car's setup puts its economy lifetime back): the
 		// economy's own lifetime would end it mid-round. Nasdara's types.xml gives the Ada and
@@ -632,6 +647,36 @@ class BR_Loot
 		// M1025 30 minutes. The round deletes its vehicles itself.
 		vehicle.SetLifetime(VEHICLE_LIFETIME);
 		return vehicle;
+	}
+
+	// Boats at the map's vanilla boat spots, as many as asked for (as many as there are spots
+	// at most), afloat: at the water's surface, a spark plug in (OnDebugSpawn), part of a tank.
+	static int Boats(BR_Spots spots, int count, float fuel, string types, array<Object> spawned)
+	{
+		if (count <= 0 || spots.boats.Count() == 0)
+			return 0;
+		array<string> colours = new array<string>();
+		types.Split("|", colours);
+		array<int> order = new array<int>();
+		for (int i = 0; i < spots.boats.Count(); i++)
+			order.Insert(i);
+		order.ShuffleArray();
+		int made = 0;
+		for (int k = 0; k < order.Count() && made < count; k++)
+		{
+			BR_CarSpot spot = spots.boats[order[k]];
+			vector pos = Vector(spot.x, GetGame().SurfaceY(spot.x, spot.z), spot.z);
+			float depth = GetGame().GetWaterDepth(pos);
+			if (depth > 0)
+				pos[1] = pos[1] + depth;
+			EntityAI boat = Vehicle(colours.GetRandomElement(), pos, spot.h, fuel);
+			if (!boat)
+				continue;
+			spawned.Insert(boat);
+			made++;
+			Print("[BattleDayZ] boat " + boat.GetType() + " at " + boat.GetPosition());
+		}
+		return made;
 	}
 
 	// --- supply drops (Expansion's airdrop plane) -------------------------------------
@@ -648,6 +693,7 @@ class BR_Loot
 		loot.Insert(new ExpansionLoot("PlateCarrierVest", null, 1));
 		loot.Insert(new ExpansionLoot("AliceBag_Green", null, 1));
 		loot.Insert(new ExpansionLoot("Morphine", null, 1));
+		loot.Insert(new ExpansionLoot("Epinephrine", null, 1));
 
 		ExpansionLootContainer container = new ExpansionLootContainer("ExpansionAirdropContainer_Military", 2, 1, loot, new TStringArray(), 8, 0, false, 4.5);
 		// Expansion's plane starts at the map edge; at its usual 35 m/s it takes ~7 minutes to
@@ -733,13 +779,7 @@ class BR_Loot
 	static void Kit(PlayerBase player)
 	{
 		Strip(player);
-		array<string> zones = new array<string>();
-		player.GetDamageZones(zones);
-		for (int z = 0; z < zones.Count(); z++)
-			player.SetHealthMax(zones[z], "Health");
-		player.SetHealth("", "", player.GetMaxHealth("", ""));
-		player.SetHealth("GlobalHealth", "Blood", player.GetMaxHealth("GlobalHealth", "Blood"));
-		player.SetHealth("GlobalHealth", "Shock", player.GetMaxHealth("GlobalHealth", "Shock"));
+		BR_Heal.Full(player);
 		player.GetStatEnergy().Set(player.GetStatEnergy().GetMax());
 		player.GetStatWater().Set(player.GetStatWater().GetMax());
 		if (player.GetBleedingManagerServer())
@@ -750,6 +790,7 @@ class BR_Loot
 		player.GetInventory().CreateInInventory("TShirt_Grey");
 		player.GetInventory().CreateInInventory("Jeans_Blue");
 		player.GetInventory().CreateInInventory("AthleticShoes_Black");
+		player.GetInventory().CreateInInventory("WorkingGloves_Black");
 		// a belt with a pistol holster on it: the first of these the belt takes
 		EntityAI belt = player.GetInventory().CreateAttachment("MilitaryBelt");
 		if (belt)

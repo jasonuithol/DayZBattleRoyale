@@ -17,7 +17,8 @@ what comes later.
    small things out in the open stand on the floor. Players appear on open, flat ground. There
    nobody can be hurt, and anyone who walks or falls off the edge is brought back. A clock at the top of the screen counts down to the
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
-   people can log in, then 1 minute between rounds (`lobbySeconds`). New characters are created here,
+   people can log in, then 3 minutes between rounds (`lobbySeconds`), or less: once everyone
+   waiting has pressed F to say they're ready, the round starts as soon as its loot is out. New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers the whole
@@ -25,7 +26,8 @@ what comes later.
    items) and 100 vehicles spread evenly over the whole map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
-   which has 15% (`carFuel`). The map is tiled with 12 x 12 squares of about 1.4 km
+   which has 15% (`carFuel`). Maps with water get boats too (`boats`: 12 on Chernarus, 5 on
+   Livonia), afloat at random vanilla boat spots, with a spark plug in and the same fuel. The map is tiled with 12 x 12 squares of about 1.4 km
    (`carSquare`), and the vehicles are dealt round its 16 quarters (4 x 4 km) in turn, so each
    gets 6 or 7, corners and edges outside the first circle included (none within 1 km of the
    lobby), with nothing guaranteed at any one place. In its square a vehicle is
@@ -35,7 +37,7 @@ what comes later.
    flat, clear, dry ground. The loot goes out a few buildings at a time over about 25 s, so
    the server never stalls.
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
-   the same plain kit (T-shirt, jeans, trainers, a military belt with a pistol holster on it,
+   the same plain kit (T-shirt, jeans, trainers, work gloves, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
    is set to noon. Expansion's plane crosses the whole map on a straight route, edge to edge,
    through a point near the middle, 400 m above the highest ground under it. That takes 2 to 3
@@ -121,8 +123,12 @@ each mission's `db/economy.xml`). Each loot spot gets one of these:
 | 10% | An attachment that fits one of the guns: Mini Sights, Baraka, ACOG, Combat Sights or hunting scope; pistol, Standardized or Normalized suppressor; 60-round STANAG, 75-round KA-M drum or 20-round DMR magazine. Sights and suppressors ignore NATO and Soviet mounts: the ACOG, Baraka and Combat Sights go on the KA-M and KA-101 too, and both rifle suppressors fit the M4 and AK muzzles and the DMR and SK 59/66 |
 | 6% | A frag grenade (M67 or RGD-5) |
 | 6% | A molotov (the Molotov mod) and a box of matches to light it |
-| 14% | A bandage, or morphine (one time in three) |
+| 14% | Medical: a bandage (half the time), morphine, epinephrine (adrenaline: its usual boost, and health back to 100%) or the PO-X antidote (gas poisoning) |
 | 9% | A jerry can, half full. Vehicles start with 15% of a tank |
+
+Reloading a gun that has a magazine on it refills that magazine from the ammo you carry (loose
+rounds, then boxes of rounds, unopened) instead of swapping magazines; with no ammo for it,
+reload works as usual.
 
 ## Layout
 

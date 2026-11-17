@@ -7,7 +7,8 @@
              (from mapgrouppos.xml); the game turns a point into world space with the
              building's own ModelToWorld, so no rotation maths here
   cars       the vanilla car, bike and truck spawn points (the Vehicle* events of
-             cfgeventspawns.xml, not boats)
+             cfgeventspawns.xml)
+  boats      its boat spawn points (VehicleBoat)
 
 All three come from the map's vanilla mission folder: dayzOffline.<terrain> in the DayZ
 server's mpmissions, or any folder given with --from (a third-party map's own mission).
@@ -47,17 +48,16 @@ for name, pos in re.findall(r'<group name="([^"]+)" pos="([^"]+)"', pos_xml):
         x, y, z = (round(float(v), 2) for v in pos.split())
         buildings.append({'t': index[name], 'x': x, 'y': y, 'z': z})
 
-cars = []
+cars, boats = [], []
 events = open(os.path.join(vanilla, 'cfgeventspawns.xml')).read()
 for name, body in re.findall(r'<event name="(Vehicle[^"]*)">(.*?)</event>', events, re.S):
-    if 'Boat' in name:
-        continue
     for tag in re.findall(r'<pos\b[^>]*>', body):
         v = dict(re.findall(r'(\w+)="([^"]*)"', tag))
         if 'x' in v and 'z' in v:   # no heading ("a") on some maps: any heading then
             h = float(v['a']) if 'a' in v else random.uniform(0, 360)
-            cars.append({'x': round(float(v['x']), 2), 'z': round(float(v['z']), 2), 'h': round(h, 1), 'types': name})
+            spot = {'x': round(float(v['x']), 2), 'z': round(float(v['z']), 2), 'h': round(h, 1), 'types': name}
+            (boats if 'Boat' in name else cars).append(spot)
 
-json.dump({'protos': protos, 'buildings': buildings, 'cars': cars}, open(out, 'w'), separators=(',', ':'))
-print('%s: %d building types, %d buildings, %d loot points, %d car spots' % (
-    out, len(protos), len(buildings), sum(len(protos[b['t']]['pts']) // 3 for b in buildings), len(cars)))
+json.dump({'protos': protos, 'buildings': buildings, 'cars': cars, 'boats': boats}, open(out, 'w'), separators=(',', ':'))
+print('%s: %d building types, %d buildings, %d loot points, %d car spots, %d boat spots' % (
+    out, len(protos), len(buildings), sum(len(protos[b['t']]['pts']) // 3 for b in buildings), len(cars), len(boats)))

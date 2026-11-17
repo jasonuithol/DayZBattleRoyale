@@ -1,7 +1,7 @@
 {
     "minPlayers": 1,
     "firstLobbySeconds": 300,
-    "lobbySeconds": 60,
+    "lobbySeconds": 180,
     "winnerSeconds": 15,
     "lobbyX": 1000,
     "lobbyZ": 1000,
@@ -14,6 +14,7 @@
     "cars": 100,
     "carSquare": 1365,
     "carFuel": 0.15,
+    "boats": 12,
     "supplyDropSeconds": 240,
     "planeSpeed": 120,
     "planeHeight": 400,
