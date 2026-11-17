@@ -1,0 +1,13 @@
+Livonia's add-on for [b]BattleDayZ[/b] (battle royale rounds, solo, last one standing wins): Livonia's own places for the lobby in the sky.
+
+[h2]The lobbies[/h2]
+Between rounds everyone waits in a copy of a real place from the map, floating a kilometre up, a different one each round:
+[list]
+[*] [b]Branzow castle:[/b] the castle walls and bastion on their hilltop.
+[*] [b]Brena square:[/b] the town square round the monument.
+[*] [b]Lukow airfield:[/b] the control tower and what stands round it.
+[/list]
+The server copies whatever stands there when it builds the lobby, so nothing has to be shipped but the list of places.
+
+[h2]Requirements[/h2]
+Server only: load it with -serverMod= after BattleDayZ, on Livonia servers. Players don't need it. It needs BattleDayZ and everything BattleDayZ needs.

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.4 - 2026-11-17
+
+- **The lobby is in the sky:** a copy of a real place on the map, floating 1 km up
+  (`lobbyHeight`), on a level concrete floor. On Chernarus: Zub castle, Chernogorsk square
+  and Prison Island. On Nasdara: Qalat-e-Lut (the caravanserai), the airport junkyard and
+  Kirov dam. On Livonia: Branzow castle, Brena square and Lukow airfield. A different one each round (`lobbies`), the next built beside the old one,
+  everyone moved across, then the old one taken down, by the server and by each player's game
+  (a server can't take back the static models it sent). Players appear on open, flat ground;
+  anyone who walks or falls off the edge is put back, unhurt. The server copies whatever
+  stands at the place when it builds the lobby: buildings (doors and ladders work), rocks and
+  anything within a building keep their heights, trees, bushes and small things in the open
+  stand on the floor. Its buildings are never saved with the world.
+- **Chernarus and Livonia:** two more missions, `battleroyale.chernarusplus` and
+  `battleroyale.enoch`, each with its own loot and car spots and lobbies.
+- **Maps kept apart from the game:** each map has a profile (`BR_Maps.c`), picked by the
+  world's name. The core mod has Chernarus; the DLC maps have small mods of their own,
+  **BattleDayZ Nasdara** and **BattleDayZ Livonia**, which their servers load after BattleDayZ
+  (server only: players don't need them). Another map (a DLC or
+  a third-party map like Deer Isle) gets its own the same way. Missions are now in
+  `missions/<map>/`.
+- **More vanilla car spots on Nasdara:** `make_spots.py` reads them straight from the map's
+  `cfgeventspawns.xml` (333 on Nasdara, motorbike spots included, against 147; 480 on
+  Chernarus, no boats, 255 on Livonia), so it works for any map with a vanilla mission folder.
+- **Any map size:** the vehicle squares come in a whole number per quarter (12 x 12 on Nasdara
+  and Chernarus, 8 x 8 on 12.8 km Livonia), and a vehicle's spot is kept 50 m inside this
+  map's edge, not Nasdara's.
+- **`tools/make_lobby.py`:** copies a place from one map into a lobby file for another
+  (`lobbies/<name>.json` in the mission), for when a map should have another map's landmark.
+- **The jump from the sky lobby:** the jump only counts as in the air once nothing solid is
+  within 5 m below, not by height above the terrain, which the lobby is a kilometre above.
+- **No guaranteed vehicles:** 0.3 gave the airport and the big military base 4 each; now no
+  place gets any for certain.
+- **Balanced over the whole map:** the vehicles are dealt round the map's 16 quarters (4 x 4
+  km) in turn, 6 or 7 each, using 12 x 12 squares lined up with the map's edges (`carSquare`
+  1365). 0.3's squares followed the first circle, which leaves out the corners and most of
+  the west, and didn't line up with the quarters (one held 9 squares, another 4). None go
+  within 1 km of the lobby.
+- **Vehicles turn up anywhere something's built:** half the time a square's vehicle goes to a
+  vanilla car spot (if it has one), otherwise it's parked by whatever structure is about,
+  classed or not (a house, a hangar, a solar farm, an oil derrick, a fort, a wreck), or out in
+  the open. 0.3 parked them only by buildings that have loot, and always took a vanilla spot
+  when there was one.
+
 ## 0.3 - 2026-11-16
 
 - **Vehicles everywhere:** the 100 vehicles are spread evenly over the map instead of only at

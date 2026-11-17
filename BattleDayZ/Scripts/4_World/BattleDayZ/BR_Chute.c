@@ -73,6 +73,16 @@ class BR_ChuteCommand: HumanCommandScript
 		return Math.Max(hit[1], terrain);
 	}
 
+	// Something solid just under the player (a floor, a roof): standing, not in the air, however
+	// high above the terrain that is (the lobby in the sky is a kilometre up)
+	static bool OnSomething(vector pos, Object ignore)
+	{
+		vector hit, normal;
+		int comp;
+		set<Object> objects = new set<Object>;
+		return DayZPhysics.RaycastRV(pos + "0 0.5 0", pos - "0 5 0", hit, normal, comp, objects, null, ignore, true, false, ObjIntersectGeom);
+	}
+
 	// The pose comes from the stance alone: lying on the belly in free fall, standing under the
 	// chute. No fall or land animation commands: calling the land animation from here and then
 	// ending the command froze the jumper's own game every time. Instead the command hands over
@@ -128,10 +138,11 @@ class BR_ChuteCommand: HumanCommandScript
 			agl = pos[1] - LandingHeight(pos, m_Player); // roofs count once it's in the air
 
 		// the jumper's own game can hear about the jump before the move out to the plane: wait,
-		// still standing in the lobby, until it's in the air (10 s at most)
+		// still standing in the lobby (on the ground or up in the sky), until it's in the air
+		// (10 s at most)
 		if (!m_Airborne)
 		{
-			if (agl > 5)
+			if (agl > 5 && !OnSomething(pos, m_Player))
 			{
 				m_Airborne = true;
 				m_TargetY = pos[1];

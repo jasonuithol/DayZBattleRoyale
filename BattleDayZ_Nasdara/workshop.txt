@@ -1,0 +1,13 @@
+Nasdara's add-on for [b]BattleDayZ[/b] (battle royale rounds, solo, last one standing wins): Nasdara's own places for the lobby in the sky.
+
+[h2]The lobbies[/h2]
+Between rounds everyone waits in a copy of a real place from the map, floating a kilometre up, a different one each round:
+[list]
+[*] [b]Qalat-e-Lut:[/b] the caravanserai, with its courtyard pool and the tents beside it.
+[*] [b]The airport junkyard:[/b] containers, wrecks and the guardhouse.
+[*] [b]Kirov dam:[/b] the top of the dam and its outlets.
+[/list]
+The server copies whatever stands there when it builds the lobby, so nothing has to be shipped but the list of places.
+
+[h2]Requirements[/h2]
+Server only: load it with -serverMod= after BattleDayZ, on Nasdara servers. Players don't need it. It needs BattleDayZ and everything BattleDayZ needs.

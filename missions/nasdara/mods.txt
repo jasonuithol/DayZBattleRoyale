@@ -1,0 +1,23 @@
+# <workshop id> <@Name>, in load order. Expansion supplies the supply drops and the plane
+# (Missions; the animated plane is in Licensed), the map on M (Navigation) and the Land Rover
+# (Vehicles); Core needs CF and Dabs Framework.
+1559212036 @CF
+2545327648 @DabsFramework
+2116157322 @DayZ-Expansion-Licensed
+2291785308 @DayZ-Expansion-Core
+2792984722 @DayZ-Expansion-Navigation
+2792984177 @DayZ-Expansion-Missions
+2291785437 @DayZ-Expansion-Vehicles
+# ours, built locally and published on the Workshop. FlyingWithoutCTD (3839393469) caps the
+# view distance on the plane and the way down, which would otherwise freeze the game.
+# BetterExplosions (3838821807) blows fuelled vehicles up into wrecks, and Molotov
+# (3832475660, which needs it) is in the loot; BetterExplosions_Expansion (3838825900) gives
+# the Land Rover its wreck too. BattleDayZ (3840761372) is built from
+# ../DayZBattleRoyale/BattleDayZ (DayZMissions mods/BattleDayZ links to it); players need it
+# too (HUD, F, the map lines, the storm).
+local @FlyingWithoutCTD
+local @BetterExplosions
+local @Molotov
+local @BetterExplosions_Expansion
+local @BattleDayZ
+local @BattleDayZ_Nasdara server

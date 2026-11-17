@@ -9,17 +9,20 @@ class BR_Settings
 	int firstLobbySeconds = 300;   // after a server start, so everyone can log in
 	int lobbySeconds = 60;         // between rounds
 	int winnerSeconds = 15;        // the winner is shown this long before everyone goes back to the lobby
-	float lobbyX = 1000;           // the lobby: open ground outside the map's playable area
+	float lobbyX = 1000;           // the lobby: over a spot outside the map's playable area
 	float lobbyZ = 1000;
+	ref array<string> lobbies;     // places copied up into the sky for it, taking turns (the next after
+	                               // every round): the map's own (BR_Maps.c) or the mission's
+	                               // lobbies/<name>.json (tools/make_lobby.py). Empty: all of the map's own
+	float lobbyHeight = 1000;      // m above the ground (0: the lobby is on the ground, at lobbyX/lobbyZ)
+	int lobbyChangeSeconds = 0;    // also change it this often while players wait (0: only between rounds)
 	float startRadius = 8000;      // the first circle: all of Nasdara (its buildings cover about 13 x 14 km)
 	float circleDrift = 0.5;       // how far off-centre each next circle can be: 0 always centred, 1 anywhere inside
 	int lootBuildings = 6000;      // buildings inside the first circle that get loot (bigger ones get up to 4 piles)
-	int cars = 100;                // vehicles inside the first circle, spread evenly over the map:
-	float carSquare = 1500;        // every square this size (m) gets the same share, at a vanilla car
-	                               // spot in it if it has a free one, otherwise on flat, clear, dry
-	                               // ground (by a building, or out in the open)
-	ref array<string> carHotspots; // "x z radius count": big places that get count of the cars within
-	                               // radius of x, z first (the airport, the big military base)
+	int cars = 100;                // vehicles, spread evenly over the whole map (none near the lobby):
+	float carSquare = 1365;        // it's tiled with squares about this size (m), lined up with its
+	                               // edges, that each have the same chance of one: at a vanilla car
+	                               // spot in it, parked by a structure, or out in the open
 	ref array<string> vehicles;    // what spawns at the car spots, one entry per vehicle, equally likely:
 	                               // its colours as "A|B|C", one picked at random
 	float carFuel = 0.15;          // fraction of a full tank
@@ -83,11 +86,6 @@ class BR_Settings
 			s.circleFractions = fractions;
 		if (!s.circleDamage || s.circleDamage.Count() == 0)
 			s.circleDamage = damage;
-		if (!s.carHotspots || s.carHotspots.Count() == 0)
-		{
-			array<string> hotspots = {"11868 10702 600 4", "3477 4813 700 4"};
-			s.carHotspots = hotspots;
-		}
 		if (!s.vehicles || s.vehicles.Count() == 0)
 		{
 			array<string> defaultVehicles = {

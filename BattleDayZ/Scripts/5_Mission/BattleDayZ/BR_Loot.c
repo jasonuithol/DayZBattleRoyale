@@ -284,165 +284,247 @@ class BR_Loot
 
 	// Ready-to-drive vehicles at vanilla car spawn points inside the circle, with a little fuel:
 	// each one of `vehicles` (an entry per vehicle, its colours "A|B|C"), equally likely.
-	// Where the round's vehicles go, spread evenly over the map: Nasdara's vanilla car spots
-	// bunch up in the towns of the centre and west (7 of 147 in the whole eastern quarter, a few
-	// by the airport). The hotspots get theirs first; then the circle is cut into squares of
-	// `square` m, shuffled, and dealt the rest one at a time, round and round: a square takes a
-	// free vanilla spot in it if it has one, otherwise a free spot (FreeSpot) by one of its
-	// buildings, or anywhere in it. Each spot is x, ground y, z and the heading in out_h.
-	static int CarSpots(BR_Spots spots, vector center, float radius, int count, float square, array<string> hotspots, array<vector> out_pos, array<float> out_h)
+	// Where the round's vehicles go, spread evenly, so every part of the map has the same
+	// chance of one: Nasdara's vanilla car spots bunch up in the towns of the centre and west
+	// (7 of 147 in the whole eastern quarter). The map is tiled with squares of about `square`
+	// m, lined up with its edges (1365 m makes 12 x 12, so every 4 km quarter-of-a-quarter holds
+	// 3 x 3 of them), and those reaching into the circle are shuffled and dealt the vehicles one
+	// at a time, round and round (CarSpotIn). No spot is outside the circle or within AVOID m of
+	// `avoid` (the lobby). Each spot is x, ground y, z, and its heading in out_h.
+	static const float AVOID = 1000;
+
+	static int CarSpots(BR_Spots spots, vector center, float radius, int count, float square, array<vector> out_pos, array<float> out_h, vector avoid = "0 0 0")
 	{
+		s_Avoid = avoid;
 		array<bool> used = new array<bool>();
 		used.Resize(spots.cars.Count());
 		for (int u = 0; u < used.Count(); u++)
 			used[u] = false;
 
-		int fromHotspots = 0;
-		if (hotspots)
-		{
-			foreach (string hs : hotspots)
-			{
-				array<string> f = new array<string>();
-				hs.Split(" ", f);
-				if (f.Count() < 4)
-					continue;
-				vector hc = Vector(f[0].ToFloat(), 0, f[1].ToFloat());
-				float hr = f[2].ToFloat();
-				int hn = f[3].ToInt();
-				if (Distance2D(hc, center) > radius)
-					continue;
-				array<BR_Building> by = new array<BR_Building>();
-				foreach (BR_Building hb : spots.buildings)
-				{
-					if (Distance2D(Vector(hb.x, 0, hb.z), hc) <= hr)
-						by.Insert(hb);
-				}
-				for (int k = 0; k < hn && out_pos.Count() < count; k++)
-				{
-					if (CarSpotNear(spots, used, by, hc, hr, hc[0] - hr, hc[2] - hr, hc[0] + hr, hc[2] + hr, center, radius, out_pos, out_h))
-						fromHotspots++;
-				}
-			}
-		}
-
-		// the squares whose middle is inside the circle, in random order
-		// and each square's loot buildings, sorted out once (a car by one looks parked there)
+		// the squares reaching into the circle, in random order
+		float world = GetGame().GetWorld().GetWorldSize();
+		// a whole number of squares to each quarter (4 x 4 of them), so every quarter has as
+		// many and gets as many vehicles: 12 on Nasdara and Chernarus, 8 on Livonia
+		int n = Math.Max(4, Math.Round(world / square / 4) * 4);
+		square = world / n;
 		array<vector> squares = new array<vector>();
-		array<ref array<BR_Building>> inSquare = new array<ref array<BR_Building>>();
-		map<int, int> squareOf = new map<int, int>(); // (i + 100) * 1000 + (j + 100) -> index into squares
-		int n = (int)Math.Ceil(radius / square);
-		for (int i = -n; i < n; i++)
+		for (int i = 0; i < n; i++)
 		{
-			for (int j = -n; j < n; j++)
+			for (int j = 0; j < n; j++)
 			{
-				vector sq = Vector(center[0] + i * square, 0, center[2] + j * square); // its south-west corner
-				vector mid = Vector(sq[0] + square / 2, 0, sq[2] + square / 2);
-				if (Distance2D(mid, center) < radius && mid[0] > 0 && mid[2] > 0 && mid[0] < 16384 && mid[2] < 16384)
-				{
-					squareOf.Set((i + 100) * 1000 + (j + 100), squares.Count());
+				vector sq = Vector(i * square, 0, j * square); // its south-west corner
+				// the square's nearest point to the centre
+				vector near = Vector(Math.Clamp(center[0], sq[0], sq[0] + square), 0, Math.Clamp(center[2], sq[2], sq[2] + square));
+				if (Distance2D(near, center) < radius)
 					squares.Insert(sq);
-					inSquare.Insert(new array<BR_Building>());
-				}
 			}
-		}
-		foreach (BR_Building b : spots.buildings)
-		{
-			int bi = Math.Floor((b.x - center[0]) / square);
-			int bj = Math.Floor((b.z - center[2]) / square);
-			int which;
-			if (squareOf.Find((bi + 100) * 1000 + (bj + 100), which))
-				inSquare[which].Insert(b);
 		}
 		for (int s = squares.Count() - 1; s > 0; s--)
-		{
-			int other = Math.RandomInt(0, s + 1);
-			squares.SwapItems(s, other);
-			inSquare.SwapItems(s, other);
-		}
-
+			squares.SwapItems(s, Math.RandomInt(0, s + 1));
+		squares = Interleaved(squares, world / 4);
 		s_Squares = squares.Count();
+
 		// round and round, until there are enough or a whole pass finds nowhere to put one
 		bool any = true;
 		bool first = true;
 		while (out_pos.Count() < count && any && squares.Count() > 0)
 		{
 			any = false;
-			for (int q = 0; q < squares.Count(); q++)
+			foreach (vector c : squares)
 			{
 				if (out_pos.Count() >= count)
 					break;
-				vector c = squares[q];
-				vector cm = Vector(c[0] + square / 2, 0, c[2] + square / 2);
-				if (CarSpotNear(spots, used, inSquare[q], cm, square, c[0], c[2], c[0] + square, c[2] + square, center, radius, out_pos, out_h))
+				if (CarSpotIn(spots, used, c[0], c[2], c[0] + square, c[2] + square, center, radius, out_pos, out_h))
 					any = true;
 				else if (first)
 					s_EmptySquares++;
 			}
 			first = false;
 		}
-		return fromHotspots;
+		return out_pos.Count();
 	}
 
-	// one spot inside the box x0..x1, z0..z1 (and the circle): a free vanilla car spot there
-	// if there is one, else a free spot by one of the box's loot buildings, else anywhere in it
-	protected static bool CarSpotNear(BR_Spots spots, array<bool> used, array<BR_Building> near, vector mid, float range, float x0, float z0, float x1, float z1, vector center, float radius, array<vector> out_pos, array<float> out_h)
+	// The (shuffled) squares dealt round the map's 4 x 4 quarters in turn - one from each, then
+	// a second from each, and so on - so every quarter gets its share of the vehicles (6 or 7
+	// of 100), not just the same chance of them.
+	protected static array<vector> Interleaved(array<vector> squares, float block)
+	{
+		array<ref array<vector>> byBlock = new array<ref array<vector>>();
+		for (int b = 0; b < 16; b++)
+			byBlock.Insert(new array<vector>());
+		foreach (vector sq : squares)
+		{
+			int bx = Math.Clamp(Math.Floor((sq[0] + 1) / block), 0, 3);
+			int bz = Math.Clamp(Math.Floor((sq[2] + 1) / block), 0, 3);
+			byBlock[bx * 4 + bz].Insert(sq);
+		}
+		for (int k = byBlock.Count() - 1; k > 0; k--)
+			byBlock.SwapItems(k, Math.RandomInt(0, k + 1));
+		array<vector> dealt = new array<vector>();
+		bool more = true;
+		for (int round = 0; more; round++)
+		{
+			more = false;
+			foreach (array<vector> inBlock : byBlock)
+			{
+				if (round < inBlock.Count())
+				{
+					dealt.Insert(inBlock[round]);
+					more = true;
+				}
+			}
+		}
+		return dealt;
+	}
+
+	// One spot in the box x0..x1, z0..z1 (and the circle), picked the way a car might have been
+	// left there: half the time a free vanilla car spot (by a road, in a town) if the box has one;
+	// otherwise parked by whatever structure is about (a house, a hangar, a solar farm, an oil
+	// derrick, a fort, a wreck: StructureNear); otherwise out in the open.
+	protected static bool CarSpotIn(BR_Spots spots, array<bool> used, float x0, float z0, float x1, float z1, vector center, float radius, array<vector> out_pos, array<float> out_h)
 	{
 		array<int> vanilla = new array<int>();
 		for (int i = 0; i < spots.cars.Count(); i++)
 		{
 			BR_CarSpot cs = spots.cars[i];
-			if (!used[i] && cs.x >= x0 && cs.x < x1 && cs.z >= z0 && cs.z < z1 && Distance2D(Vector(cs.x, 0, cs.z), mid) <= range && Distance2D(Vector(cs.x, 0, cs.z), center) < radius)
+			if (!used[i] && cs.x >= x0 && cs.x < x1 && cs.z >= z0 && cs.z < z1 && Distance2D(Vector(cs.x, 0, cs.z), center) < radius && (s_Avoid == vector.Zero || Distance2D(Vector(cs.x, 0, cs.z), s_Avoid) >= AVOID))
 				vanilla.Insert(i);
 		}
-		if (vanilla.Count() > 0)
+		if (vanilla.Count() > 0 && Math.RandomInt(0, 2) == 0)
 		{
-			int pick = vanilla.GetRandomElement();
-			used[pick] = true;
-			BR_CarSpot v = spots.cars[pick];
-			out_pos.Insert(Vector(v.x, GetGame().SurfaceY(v.x, v.z), v.z));
-			out_h.Insert(v.h);
+			TakeVanilla(spots, used, vanilla.GetRandomElement(), out_pos, out_h);
+			s_Kinds[0] = s_Kinds[0] + 1;
 			return true;
 		}
 
 		vector pos;
-		for (int t = 0; t < 40; t++)
+		for (int look = 0; look < 8; look++)
 		{
-			float x, z;
-			if (near.Count() > 0 && t < 25)
-			{
-				// parked by a building: 10 to 20 m from it, in any direction
-				BR_Building nb = near.GetRandomElement();
-				float a = Math.RandomFloat(0, Math.PI2);
-				float d = Math.RandomFloat(10, 20);
-				x = nb.x + Math.Cos(a) * d;
-				z = nb.z + Math.Sin(a) * d;
-			}
-			else
-			{
-				x = Math.RandomFloat(x0, x1);
-				z = Math.RandomFloat(z0, z1);
-			}
-			if (x < x0 || x >= x1 || z < z0 || z >= z1 || Distance2D(Vector(x, 0, z), center) >= radius || Distance2D(Vector(x, 0, z), mid) > range)
+			Object by = StructureNear(Math.RandomFloat(x0, x1), Math.RandomFloat(z0, z1));
+			if (!by)
 				continue;
-			if (FreeSpot(x, z, out_pos, pos))
+			vector bp = by.GetPosition();
+			vector box[2];
+			float reach = Math.Min(by.ClippingInfo(box), 40); // its size: park just outside it
+			for (int t = 0; t < 6; t++)
+			{
+				float a = Math.RandomFloat(0, Math.PI2);
+				float d = reach + Math.RandomFloat(3, 12);
+				float x = bp[0] + Math.Cos(a) * d;
+				float z = bp[2] + Math.Sin(a) * d;
+				if (x < x0 || x >= x1 || z < z0 || z >= z1 || Distance2D(Vector(x, 0, z), center) >= radius)
+					continue;
+				if (FreeSpot(x, z, out_pos, pos))
+				{
+					out_pos.Insert(pos);
+					out_h.Insert(Math.RandomFloat(0, 360));
+					s_Kinds[1] = s_Kinds[1] + 1;
+					if (s_By.Count() < 40)
+						s_By.Insert(ShapeOf(by));
+					return true;
+				}
+			}
+		}
+
+		for (int o = 0; o < 20; o++)
+		{
+			float ox = Math.RandomFloat(x0, x1);
+			float oz = Math.RandomFloat(z0, z1);
+			if (Distance2D(Vector(ox, 0, oz), center) < radius && FreeSpot(ox, oz, out_pos, pos))
 			{
 				out_pos.Insert(pos);
 				out_h.Insert(Math.RandomFloat(0, 360));
+				s_Kinds[2] = s_Kinds[2] + 1;
 				return true;
 			}
+		}
+
+		if (vanilla.Count() > 0)
+		{
+			TakeVanilla(spots, used, vanilla.GetRandomElement(), out_pos, out_h);
+			s_Kinds[0] = s_Kinds[0] + 1;
+			return true;
 		}
 		return false;
 	}
 
-	// flat, dry ground with nothing within 6 m (no building, wall, tree, rock or vehicle) and
-	// no other vehicle of the round within 15 m
+	protected static void TakeVanilla(BR_Spots spots, array<bool> used, int pick, array<vector> out_pos, array<float> out_h)
+	{
+		used[pick] = true;
+		BR_CarSpot v = spots.cars[pick];
+		out_pos.Insert(Vector(v.x, GetGame().SurfaceY(v.x, v.z), v.z));
+		out_h.Insert(v.h);
+	}
+
+	// a structure within 100 m of x, z, picked at random: a feature a car might be left at (a
+	// house, a hangar, a solar farm, an oil derrick, a fort, a wreck, a ruin, a station), many
+	// of them without a class of their own, at least shed-sized. Not walls, fences or road
+	// pieces, which are everywhere and would win nearly every pick, nor rocks, plants, power
+	// lines, pylons or rubble.
+	static Object StructureNear(float x, float z)
+	{
+		array<Object> found = new array<Object>();
+		GetGame().GetObjectsAtPosition(Vector(x, GetGame().SurfaceY(x, z), z), 100, found, null);
+		array<Object> built = new array<Object>();
+		foreach (Object o : found)
+		{
+			if (IsStructure(o))
+				built.Insert(o);
+		}
+		if (built.Count() == 0)
+			return null;
+		return built.GetRandomElement();
+	}
+
+	static ref array<string> FEATURE_FOLDERS = {"\\residential\\", "\\industrial\\", "\\military\\", "\\specific\\", "\\wrecks\\", "\\ruins\\", "\\rail\\"};
+	static ref array<string> NOT_FEATURES = {"\\forest\\", "power_wire", "rubble", "dirtpile", "\\walls\\", "\\roads\\", "fence", "_wall", "power_vhv", "power_hv", "power_wire", "irrigationtunnel", "shellcrater", "barbedwire", "misc_timbers"};
+
+	static bool IsStructure(Object o)
+	{
+		if (!o || o.IsTree() || o.IsBush() || o.IsRock())
+			return false;
+		if (o.IsInherited(ItemBase) || o.IsInherited(Transport) || o.IsInherited(Man))
+			return false;
+		string shape = ShapeOf(o);
+		if (shape.IndexOf("structures") < 0)
+			return false;
+		bool feature = false;
+		foreach (string folder : FEATURE_FOLDERS)
+		{
+			if (shape.IndexOf(folder) >= 0)
+				feature = true;
+		}
+		if (!feature)
+			return false;
+		foreach (string clutter : NOT_FEATURES)
+		{
+			if (shape.IndexOf(clutter) >= 0)
+				return false;
+		}
+		vector box[2];
+		return o.ClippingInfo(box) >= 3;
+	}
+
+	static string ShapeOf(Object o)
+	{
+		string shape = o.GetShapeName();
+		shape.ToLower();
+		return shape;
+	}
+
+	static ref array<int> s_Kinds = {0, 0, 0}; // diagnostics: at a vanilla spot, by a structure, in the open
+	static ref array<string> s_By = new array<string>();
+
 	static ref array<int> s_Why = {0, 0, 0, 0, 0, 0}; // diagnostics: edge, water, slope, bumpy, near a car, objects
 	static int s_Squares;
 	static int s_EmptySquares;
 
+	protected static vector s_Avoid;
+
 	static bool FreeSpot(float x, float z, array<vector> taken, out vector pos)
 	{
-		if (x < 50 || z < 50 || x > 16334 || z > 16334)
+		float edge = GetGame().GetWorld().GetWorldSize() - 50;
+		if (x < 50 || z < 50 || x > edge || z > edge || (s_Avoid != vector.Zero && Distance2D(Vector(x, 0, z), s_Avoid) < AVOID))
 		{
 			s_Why[0] = s_Why[0] + 1;
 			return false;
@@ -488,11 +570,11 @@ class BR_Loot
 		return true;
 	}
 
-	static int Cars(BR_Spots spots, vector center, float radius, int count, float fuel, array<string> vehicles, array<Object> spawned, float square = 1500, array<string> hotspots = null)
+	static int Cars(BR_Spots spots, vector center, float radius, int count, float fuel, array<string> vehicles, array<Object> spawned, float square = 1365, vector avoid = "0 0 0")
 	{
 		array<vector> where = new array<vector>();
 		array<float> headings = new array<float>();
-		int fromHotspots = CarSpots(spots, center, radius, count, square, hotspots, where, headings);
+		CarSpots(spots, center, radius, count, square, where, headings, avoid);
 
 		int done = 0;
 		for (int i = 0; i < where.Count(); i++)
@@ -507,7 +589,6 @@ class BR_Loot
 			spawned.Insert(vehicle);
 			done++;
 		}
-		Print("[BattleDayZ] " + done + " vehicles, " + fromHotspots + " of them at the hotspots");
 		return done;
 	}
 

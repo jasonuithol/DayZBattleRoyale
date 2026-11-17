@@ -1,29 +1,39 @@
 # BattleDayZ
 
-Solo battle royale rounds on DayZ, starting with Nasdara. This is the simplest version of
+Solo battle royale rounds on DayZ, on Nasdara, Chernarus and Livonia. This is the simplest version of
 every feature, built to get a playable demo running. `DESIGN.md` has the bigger picture and
 what comes later.
 
 ## How a round goes
 
-1. **Lobby.** Everyone who isn't in a round waits in the lobby, on a patch of flat open ground
-   off the edge of the map, near (220, 1780). There nobody can be hurt, and anyone who walks
-   more than 30 m off is brought back. A clock at the top of the screen counts down to the
+1. **Lobby.** Everyone who isn't in a round waits in the lobby: a copy of a real place on the
+   map floating 1 km up (`lobbyHeight`) over a spot off its edge (`lobbyX`, `lobbyZ`), on a
+   level concrete floor. Each map has its own places (its profile, `BR_Maps.c`): Zub castle,
+   Chernogorsk square and Prison Island on Chernarus; Qalat-e-Lut, the airport junkyard and
+   Kirov dam on Nasdara; Branzow castle, Brena square and Lukow airfield on Livonia. A different one each round (`lobbies` lists the ones to use, empty
+   for all of them; `lobbyChangeSeconds` also changes it during a long wait). The server
+   copies whatever stands at the place: buildings (as their Land_ class, so doors and ladders
+   work), rocks and anything within a building keep their heights, and trees, bushes and
+   small things out in the open stand on the floor. Players appear on open, flat ground. There
+   nobody can be hurt, and anyone who walks or falls off the edge is brought back. A clock at the top of the screen counts down to the
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
    people can log in, then 1 minute between rounds (`lobbySeconds`). New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
-   diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers all of
-   Nasdara, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
-   items) and 100 vehicles spread evenly over the map, each equally likely one of: a
+   diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers the whole
+   map, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
+   items) and 100 vehicles spread evenly over the whole map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
-   which has 15% (`carFuel`). The map is cut into 1.5 km squares (`carSquare`) that each get
-   the same share of the vehicles, at a vanilla car spot in the square if it has a free one,
-   otherwise on flat, clear, dry ground by a building or out in the open; big places get a few
-   first (`carHotspots`, "x z radius count": the airport and the military base, 4 each). It
-   goes out a few buildings at a time
-   over about 25 s, so the server never stalls.
+   which has 15% (`carFuel`). The map is tiled with 12 x 12 squares of about 1.4 km
+   (`carSquare`), and the vehicles are dealt round its 16 quarters (4 x 4 km) in turn, so each
+   gets 6 or 7, corners and edges outside the first circle included (none within 1 km of the
+   lobby), with nothing guaranteed at any one place. In its square a vehicle is
+   left the way one might have been: half the time at a vanilla car spot (by a road, in a town)
+   if the square has a free one, otherwise parked by whatever structure is about (a house, a
+   hangar, a solar farm, an oil derrick, a fort, a wreck), otherwise out in the open, always on
+   flat, clear, dry ground. The loot goes out a few buildings at a time over about 25 s, so
+   the server never stalls.
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
    the same plain kit (T-shirt, jeans, trainers, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
@@ -102,7 +112,7 @@ Three settings in `battleroyale.json`, all off by default, shorten a test:
 ## Loot
 
 There is no base building, food or zombies. The Central Economy spawns nothing (see
-`mission/db/economy.xml`). Each loot spot gets one of these:
+each mission's `db/economy.xml`). Each loot spot gets one of these:
 
 | Chance | What |
 |---|---|
@@ -130,15 +140,28 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
   - `5_Mission`: the round itself (`BR_Round.c`), the plane (`BR_Flight.c`), loot, cars and
     supply drops (`BR_Loot.c`), the settings (`BR_Settings.c`), the client HUD, the storm's
     gas and wall, and the F key (`BR_MissionGameplay.c`), and the lines on the map (`BR_Map.c`).
-- `mission/`: the `battleroyale.nasdara` mission.
+  - The lobby in the sky (`BR_Lobby.c`) and each map's profile (`BR_Maps.c`, with Chernarus).
+    Swapping lobbies: the server moves everyone, takes the old one down 5 s later (deleting
+    the floor someone stood on in the same frame crashed the server), and each player's game
+    takes down its own copy of the old one's static models (`BR_LobbyGhosts` in `3_Game`).
+- `BattleDayZ_Nasdara/` and `BattleDayZ_Livonia/`: those maps' profiles, each a small
+  server-only mod of its own (`-serverMod=`, after BattleDayZ; players don't need them).
+  Another map gets one the same way: a `BR_Map` subclass with its places, added in a
+  `modded class BR_Maps` (see the top of `BR_Maps.c`).
+- `missions/nasdara/`, `missions/chernarusplus/` and `missions/enoch/` (Livonia): the
+  `battleroyale.nasdara`, `battleroyale.chernarusplus` and `battleroyale.enoch` missions.
   - `battleroyale.json`: the settings. Every field and its default is in `BR_Settings.c`.
   - `br_spots.json`: the loot and car spots.
   - `db/economy.xml`: switches the Central Economy off.
   - `expansion/missions/`: deliberately empty, which stops Expansion's own random airdrops.
   - `expansion/settings/MapSettings.json`: Expansion's map settings, with the compass on for
     everyone (`NeedCompassItemForHUDCompass` and `NeedGPSItemForHUDCompass` off).
-- `tools/make_spots.py`: rebuilds `br_spots.json` from vanilla `mapgroupproto.xml`,
-  `mapgrouppos.xml`, and the car spots in DayZMissions' `roles.nasdara`.
+- `tools/make_spots.py <map>`: rebuilds a mission's `br_spots.json` from the map's vanilla
+  `mapgroupproto.xml`, `mapgrouppos.xml` and `cfgeventspawns.xml` (`--from` for a
+  third-party map's own mission folder).
+- `tools/make_lobby.py`: copies a place from one map into a lobby file for another
+  (`lobbies/<name>.json` in that mission), read from the game's own map files with
+  DayZ3dMap. A map's own places don't need it: the server copies those itself.
 - The parachute, built the same way as the Molotov mod's model:
   - `blender/build_parachute.py` builds the model, `models/parachute.blend` and the preview
     renders in `models/`.
@@ -164,21 +187,25 @@ There is no base building, food or zombies. The Central Economy spawns nothing (
   (`BR_Leftovers.c`). A building a molotov burns down stays a ruin until the server restarts,
   as the Molotov mod intends.
 
-The full list is in `mission/mods.txt`.
+The full list is in each mission's `mods.txt`; Nasdara's and Livonia's add their own
+BattleDayZ mod on the server.
 
 ## Running it
 
 It uses the DayZMissions tooling. `~/Projects/DayZMissions/mods/BattleDayZ` links to the
-staged build, `build/BattleDayZ`, and `missions/battleroyale.nasdara` links to `mission/`.
+staged build, `build/BattleDayZ`, `mods/BattleDayZ_Nasdara` and `mods/BattleDayZ_Livonia` to
+their folders here, and
+`missions/battleroyale.<map>` to `missions/<map>/`. Use the full mission name: plain
+`battleroyale` picks the first one alphabetically.
 Run `tools/build.sh` after any change to the mod, scripts included, before starting a
 server.
 
 ```bash
 tools/build.sh                     # in this repo: stage the mod
 cd ~/Projects/DayZMissions
-tools/test.sh battleroyale         # headless check, prints [BRTest] lines, about a minute
-tools/run_server.sh battleroyale   # local server
-tools/run_client.sh battleroyale   # client with the same mods, connects to 127.0.0.1
+tools/test.sh battleroyale.nasdara         # headless check, prints [BRTest] lines, about a minute
+tools/run_server.sh battleroyale.nasdara   # local server (or .chernarusplus, .enoch)
+tools/run_client.sh battleroyale.nasdara   # client with the same mods, connects to 127.0.0.1
 ```
 
 What the headless test checks:
@@ -195,10 +222,16 @@ What the headless test checks:
 - a storm hit takes exactly the health it should
 - the storm wall's model loads
 - a supply-drop plane is sent, and a supply crate is cleaned up
+- the lobby in the sky: every piece built where it should be, players appear on the floor, a
+  body stands on it, one that walks off the edge is caught and put back; a lobby change
+  leaves nothing of the old one on the server; and every one of the map's lobbies (and the
+  mission's lobby files) builds with spawn spots on open, flat ground
 - the clean-up leaves nothing behind
 
 It can't check anything that needs a player: the HUD, the gas, the wall, the compass, F, the
-view from the plane, steering, the canopy, the lines on the map, teleporting and the flinch.
+view from the plane, steering, the canopy, the lines on the map, teleporting, the flinch, and
+whether a player's game takes the old lobby down (its log says `client: took down the old
+lobby`).
 
 ## Known limits
 

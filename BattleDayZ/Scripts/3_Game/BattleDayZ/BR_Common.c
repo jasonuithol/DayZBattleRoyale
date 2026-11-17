@@ -39,6 +39,8 @@ class BR_State
 	vector planeVel;
 	string title;      // the HUD's top line, already formatted by the server
 	string subtitle;   // and the one under it
+	vector lobbyAt;    // the lobby in the sky (zero: none), and how far its pieces reach from
+	float lobbyReach;  // there: a client takes down the old one when it moves (BR_LobbyGhosts)
 
 	void Write(ParamsWriteContext ctx)
 	{
@@ -60,6 +62,8 @@ class BR_State
 		ctx.Write(planeVel);
 		ctx.Write(title);
 		ctx.Write(subtitle);
+		ctx.Write(lobbyAt);
+		ctx.Write(lobbyReach);
 	}
 
 	bool Read(ParamsReadContext ctx)
@@ -70,7 +74,9 @@ class BR_State
 			return false;
 		if (!ctx.Read(flying) || !ctx.Read(routeFrom) || !ctx.Read(routeTo) || !ctx.Read(planePos) || !ctx.Read(planeVel))
 			return false;
-		return ctx.Read(title) && ctx.Read(subtitle);
+		if (!ctx.Read(title) || !ctx.Read(subtitle))
+			return false;
+		return ctx.Read(lobbyAt) && ctx.Read(lobbyReach);
 	}
 
 	// horizontal distance from pos to the circle's edge; positive means outside
@@ -197,6 +203,47 @@ class BR_Steer
 	}
 }
 
+// Client: the lobby in the sky that's been taken down stays in this game (a server can't take
+// back a static model it sent), so when the lobby moves this game takes the old one down itself:
+// every plain static object round where it was, up there in the sky. Buildings (Land_ classes)
+// are entities the server deletes properly; they're only counted.
+class BR_LobbyGhosts
+{
+	static vector s_At;
+	static float s_Reach;
+
+	static void Seen(vector at, float reach)
+	{
+		if (at == vector.Zero)
+			return;
+		if (s_At != vector.Zero && vector.Distance(at, s_At) > 1)
+			Clear(s_At, s_Reach);
+		s_At = at;
+		s_Reach = reach;
+	}
+
+	static void Clear(vector at, float reach)
+	{
+		array<Object> found = new array<Object>();
+		GetGame().GetObjectsAtPosition3D(at, reach, found, null);
+		int cleared = 0;
+		int entities = 0;
+		foreach (Object o : found)
+		{
+			if (!o || o.IsInherited(Man))
+				continue;
+			if (o.IsInherited(EntityAI))
+			{
+				entities++;
+				continue;
+			}
+			GetGame().ObjectDelete(o);
+			cleared++;
+		}
+		Print("[BattleDayZ] client: took down the old lobby at " + at + ": " + cleared + " pieces, " + entities + " entities left to the server");
+	}
+}
+
 // Server side: the round (5_Mission) listens here for jump requests.
 class BR_Server
 {
@@ -216,6 +263,8 @@ modded class DayZGame
 				BR_Client.s_ReceivedAt = GetTickTime();
 				if (state.flying && !IsServer())
 					BR_Plane.Set(state.planePos, state.planeVel);
+				if (!IsServer())
+					BR_LobbyGhosts.Seen(state.lobbyAt, state.lobbyReach);
 			}
 			return;
 		}
