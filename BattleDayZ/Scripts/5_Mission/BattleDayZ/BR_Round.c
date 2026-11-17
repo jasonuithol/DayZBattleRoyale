@@ -104,6 +104,28 @@ class BR_Round
 		return s_Instance;
 	}
 
+	// the mission is ending (the server shutting down): stop every timer and let go of every
+	// game object, while the world they're in still exists. Left to the program's final
+	// clean-up (after the world is gone) they crashed the server on every shutdown.
+	static void Stop()
+	{
+		if (!s_Instance)
+			return;
+		ScriptCallQueue queue = GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY);
+		queue.Remove(s_Instance.Tick);
+		queue.Remove(s_Instance.LootStep);
+		queue.Remove(s_Instance.PrepareRound);
+		queue.Remove(s_Instance.TakeDown);
+		queue.Remove(s_Instance.SelfTestSkyFall);
+		queue.Remove(s_Instance.SelfTestSkyBack);
+		queue.Remove(s_Instance.SelfTestRefillAfter);
+		BR_Server.s_OnJump.Remove(s_Instance.OnJump);
+		s_Instance = null;
+		BR_Leftovers.s_List.Clear();
+		ExpansionAirdropContainerBase.s_BR_Crates.Clear();
+		Print("[BattleDayZ] stopped: the mission is ending");
+	}
+
 	void Init()
 	{
 		m_Settings = BR_Settings.Load();
@@ -1302,16 +1324,21 @@ class BR_Round
 		UpdateMarkers();
 		Print("[BRTest] " + m_Markers.Count() + " map markers");
 		m_Revealed = false;
-		SelfTestCircles();
-		SelfTestHits();
-		SelfTestGuns();
-		SelfTestSky();
+		if (!TestSkips("circles"))
+			SelfTestCircles();
+		if (!TestSkips("hits"))
+			SelfTestHits();
+		if (!TestSkips("guns"))
+			SelfTestGuns();
+		if (!TestSkips("sky"))
+			SelfTestSky();
 
 		// the plane over the whole-map circle
 		vector mapCenter = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
 		BR_Flight flight = BR_Flight.Plan(mapCenter, m_Settings.startRadius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 		int planesBefore = ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count();
-		flight.TakeOff(Now());
+		if (!TestSkips("plane"))
+			flight.TakeOff(Now());
 		Print("[BRTest] plane route " + flight.from + " -> " + flight.to + ", " + flight.length + " m at " + flight.altitude + " m, " + flight.Duration() + " s; planes " + planesBefore + " -> " + ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count() + "; halfway at " + flight.PositionAt(Now() + flight.Duration() / 2));
 
 		// the parachute, on the kitted test character: 50 m up, about 8 s down at the chute's speed
@@ -1319,11 +1346,13 @@ class BR_Round
 		{
 			vector up = m_TestBody.GetPosition() + "0 50 0";
 			m_TestBody.SetAllowDamage(true);
-			m_TestBody.BR_StartChute();
+			if (!TestSkips("chute"))
+				m_TestBody.BR_StartChute();
 			m_TestBody.SetPosition(up);
 			Print("[BRTest] chute: jumped at " + BR_ChuteCommand.HeightAboveGround(m_TestBody.GetPosition()) + " m above the ground");
 		}
-		Print("[BRTest] supply drop sent: " + BR_Loot.SupplyDrop(m_NextCenter));
+		if (!TestSkips("drop"))
+			Print("[BRTest] supply drop sent: " + BR_Loot.SupplyDrop(m_NextCenter));
 		// a plane takes over a minute to drop, longer than the test: put a crate down directly
 		Object crate = GetGame().CreateObjectEx("ExpansionAirdropContainer_Military", GroundSpot(), ECE_PLACE_ON_SURFACE);
 		Print("[BRTest] test crate " + crate + ", crates tracked: " + ExpansionAirdropContainerBase.s_BR_Crates.Count());
@@ -1634,12 +1663,20 @@ class BR_Round
 		}
 	}
 
-	void SelfTestFinish()
+	// -brskip=a,b,...: self-test steps to leave out (for tracking down what a step leaves behind)
+	bool TestSkips(string step)
 	{
-		SelfTestKitCheck();
-		if (m_SkyOld)
-			Print("[BRTest] sky lobby change: " + m_SkyOld.StillThere() + " of " + m_SkyOld.m_Built.Count() + " pieces of " + m_SkyOld.m_Title + " left on the server");
-		// and every lobby of this map, and every one in the mission's lobbies folder, builds
+		string skip;
+		if (!GetGame().CommandlineGetParam("brskip", skip))
+			return false;
+		array<string> steps = new array<string>();
+		skip.Split(",", steps);
+		return steps.Find(step) >= 0 || steps.Find("all") >= 0;
+	}
+
+	// every lobby of this map, and every one in the mission's lobbies folder, builds
+	void SelfTestLobbies()
+	{
 		array<string> names = new array<string>();
 		foreach (BR_LobbySpec spec : m_Map.m_Lobbies)
 			names.Insert(spec.name + ".json");
@@ -1681,6 +1718,15 @@ class BR_Round
 			Print("[BRTest] sky lobby " + name + " (" + each.m_Title + "): " + each.m_Built.Count() + " pieces (" + each.m_Buildings + " buildings), " + each.m_Failed + " failed, worst miss " + each.m_WorstMiss + " m, " + spots + " of 10 spots on the floor");
 			each.Destroy();
 		}
+	}
+
+	void SelfTestFinish()
+	{
+		SelfTestKitCheck();
+		if (m_SkyOld)
+			Print("[BRTest] sky lobby change: " + m_SkyOld.StillThere() + " of " + m_SkyOld.m_Built.Count() + " pieces of " + m_SkyOld.m_Title + " left on the server");
+		if (!TestSkips("lobbies"))
+			SelfTestLobbies();
 		int fuelled = 0;
 		for (int c = 0; c < m_TestCars.Count(); c++)
 		{

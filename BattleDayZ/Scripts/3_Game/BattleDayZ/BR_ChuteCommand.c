@@ -1,0 +1,246 @@
+// The jump's script command (the free fall and the chute), started by the character in
+// 4_World/BR_Chute.c. It lives here in 3_Game, not with the character in 4_World: the game keeps
+// a finished script command until its own shutdown, and one whose class was in 4_World (the
+// script module unloaded first) crashed every game and server that had run a jump, as it shut
+// down. A command that did nothing at all crashed it the same way; one in 3_Game doesn't. So it
+// knows the character only as a DayZPlayer, and the character tells it whether F was pressed.
+// The jump from the plane: free fall until the player opens the chute with F (or it opens by
+// itself low down), then a slow, steerable glide to the ground. Nobody has a gun on the way down, so it's only movement.
+//
+// It's a script command (it replaces walking/falling while it runs). The server starts it by
+// bumping m_BR_ChuteId, which is synced, so the server, the jumper's own game and everyone
+// watching all run the same command from the same inputs. It ends on landing, without the
+// fall damage a normal fall from that height would do.
+class BR_ChuteCommand: HumanCommandScript
+{
+	static const float FREEFALL_DOWN = 22.5; // m/s: half a real skydiver's, for more time to pick a spot
+	static const float FREEFALL_GLIDE = 30;  // m/s sideways, steering with the movement keys
+	static const float CHUTE_DOWN = 6;
+	static const float CHUTE_GLIDE = 9;
+	static const float AUTO_OPEN_HEIGHT = 100; // m above the ground, if the player hasn't opened it
+	static const float HANDOVER_HEIGHT = 1.5;  // m: vanilla's own fall takes over from here, and lands
+	static const float BLOCKED_HEIGHT = 60;    // m: below this, being unable to go down is a landing (on a roof, a rock)
+	static const float LOOK_DOWN = 150;        // m above the terrain: below this, roofs and the like count as the ground
+
+	protected DayZPlayer m_Player;
+	protected bool m_OpenAsked; // the player pressed F: the character tells it every frame (SetOpenAsked)
+	protected HumanInputController m_Input;
+	protected int m_VarStance;
+	protected bool m_Finished;
+	protected bool m_Open;
+	protected bool m_Landing;
+	protected bool m_Airborne;  // has been properly in the air: only then can it land
+	protected float m_Age;
+	protected float m_TargetY;  // where it should be by now: the descent is steered to this
+	protected float m_Blocked;  // how long it's been stuck well above its target (a roof, a rock)
+	protected float m_Speed;    // diagnostics: the movement input
+	protected vector m_Dir;
+	protected int m_Pre;        // diagnostics: how often each update ran
+	protected int m_Post;
+	protected float m_LogAt;
+
+	void BR_ChuteCommand(Human human)
+	{
+		m_Player = DayZPlayer.Cast(human);
+		m_Input = human.GetInputController();
+		m_VarStance = human.GetAnimInterface().BindVariableInt("Stance");
+	}
+
+	bool IsOpen()
+	{
+		return m_Open;
+	}
+
+	void SetOpenAsked(bool asked)
+	{
+		m_OpenAsked = asked;
+	}
+
+	static float HeightAboveGround(vector pos)
+	{
+		return pos[1] - GetGame().SurfaceY(pos[0], pos[2]);
+	}
+
+	// What it would land on: the terrain, or whatever is under the player above it (a roof, a
+	// car, a rock), seen with a ray straight down through the collision geometry. The terrain
+	// alone pulled a jumper coming down on a roof through it to the ground. Plants don't count
+	// (a treetop is no place to land): the terrain under them does.
+	static float LandingHeight(vector pos, Object ignore)
+	{
+		float terrain = GetGame().SurfaceY(pos[0], pos[2]);
+		if (pos[1] - terrain > LOOK_DOWN)
+			return terrain;
+		vector hit, normal;
+		int comp;
+		set<Object> objects = new set<Object>;
+		vector from = Vector(pos[0], pos[1] + 0.5, pos[2]);
+		vector to = Vector(pos[0], terrain - 0.5, pos[2]);
+		if (!DayZPhysics.RaycastRV(from, to, hit, normal, comp, objects, null, ignore, true, false, ObjIntersectGeom))
+			return terrain;
+		for (int i = 0; i < objects.Count(); i++)
+		{
+			if (objects[i] && (objects[i].IsTree() || objects[i].IsBush()))
+				return terrain;
+		}
+		return Math.Max(hit[1], terrain);
+	}
+
+	// Something solid just under the player (a floor, a roof): standing, not in the air, however
+	// high above the terrain that is (the lobby in the sky is a kilometre up)
+	static bool OnSomething(vector pos, Object ignore)
+	{
+		vector hit, normal;
+		int comp;
+		set<Object> objects = new set<Object>;
+		return DayZPhysics.RaycastRV(pos + "0 0.5 0", pos - "0 5 0", hit, normal, comp, objects, null, ignore, true, false, ObjIntersectGeom);
+	}
+
+	// The pose comes from the stance alone: lying on the belly in free fall, standing under the
+	// chute. No fall or land animation commands: calling the land animation from here and then
+	// ending the command froze the jumper's own game every time. Instead the command hands over
+	// HANDOVER_HEIGHT above the ground, and vanilla starts its own fall command, which lands the
+	// player properly (a short, light landing).
+	override int GetCurrentStance()
+	{
+		if (m_Open)
+			return DayZPlayerConstants.STANCEIDX_ERECT;
+		return DayZPlayerConstants.STANCEIDX_PRONE;
+	}
+
+	// Gravity is off for the jump, on every machine running it: the jumper's own game couldn't
+	// push back against it (it fell up to 40 m behind the server, which then yanked it back up).
+	override void OnActivate()
+	{
+		dBodyEnableGravity(m_Player, false);
+		Print("[BattleDayZ] chute command started (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up");
+	}
+
+	override void OnDeactivate()
+	{
+		dBodyEnableGravity(m_Player, true);
+		Print("[BattleDayZ] chute command ended (" + m_Player.GetInstanceType() + ") " + HeightAboveGround(m_Player.GetPosition()) + " m up, open " + m_Open + ", " + m_Pre + " pre / " + m_Post + " post updates");
+	}
+
+	override void PreAnimUpdate(float pDt)
+	{
+		SetHeading(m_Input.GetHeadingAngle()); // face where the camera looks
+		PreAnim_SetInt(m_VarStance, GetCurrentStance());
+
+		// landed (seen last frame in PrePhysUpdate): finish. No hands-up gesture under the chute:
+		// neither as a modifier (AddCommandModifier_Action) nor straight through the anim graph
+		// (CMD_Action) does it play during a script command.
+		if (m_Landing)
+		{
+			m_Finished = true;
+			SetFlagFinished(true);
+		}
+	}
+
+	// Everything happens here (it runs every frame): the height is steered to a target that
+	// comes down at the free fall or chute speed. The game's own gravity keeps adding to the
+	// fall under a script command, so a fixed speed isn't enough: each frame makes up whatever
+	// gap there is to the target, up or down.
+	override void PrePhysUpdate(float pDt)
+	{
+		m_Pre++;
+		m_Age += pDt;
+		vector pos = m_Player.GetPosition();
+		float agl = HeightAboveGround(pos);
+		if (m_Airborne)
+			agl = pos[1] - LandingHeight(pos, m_Player); // roofs count once it's in the air
+
+		// the jumper's own game can hear about the jump before the move out to the plane: wait,
+		// still standing in the lobby (on the ground or up in the sky), until it's in the air
+		// (10 s at most)
+		if (!m_Airborne)
+		{
+			if (agl > 5 && !OnSomething(pos, m_Player))
+			{
+				m_Airborne = true;
+				m_TargetY = pos[1];
+			}
+			else
+			{
+				if (m_Age > 10)
+					Land("never got into the air", agl);
+				PrePhys_SetTranslation(vector.Zero);
+				return;
+			}
+		}
+
+		if (!m_Open && (m_OpenAsked || agl < AUTO_OPEN_HEIGHT))
+			m_Open = true;
+		float down = FREEFALL_DOWN;
+		float glide = FREEFALL_GLIDE;
+		if (m_Open)
+		{
+			down = CHUTE_DOWN;
+			glide = CHUTE_GLIDE;
+		}
+
+		// The server's height wins: when it corrects this game's position (a frame's head start
+		// makes the two targets drift apart by a few metres), take the corrected height as the
+		// target instead of steering back against it, which jittered up and down.
+		if (!GetGame().IsServer() && Math.AbsFloat(pos[1] - m_TargetY) > 0.5)
+			m_TargetY = pos[1];
+
+		float ground = pos[1] - agl;
+		m_TargetY = Math.Max(m_TargetY - down * pDt, ground);
+
+		// the keys (BR_Steer): the jumper's own game reads them, the server hears them from it.
+		// The character faces the camera (SetHeading), so this is relative to the view.
+		vector dir = vector.Zero;
+		if (GetGame().IsServer())
+		{
+			if (m_Player.GetIdentity())
+				dir = BR_Steer.ForPlayer(m_Player.GetIdentity().GetId());
+		}
+		else if (m_Player == GetGame().GetPlayer())
+			dir = BR_Steer.s_Local;
+		m_Speed = dir.Length();
+		m_Dir = dir;
+		vector move = vector.Zero;
+		if (dir.Length() > 0.05)
+		{
+			if (dir.Length() > 1)
+				dir = dir.Normalized();
+			move = dir * glide * pDt;
+		}
+		move[1] = m_TargetY - pos[1];
+		PrePhys_SetTranslation(move);
+
+		// landed; or stuck on something (a roof, a rock) well above where it should be, low down
+		if (agl < HANDOVER_HEIGHT)
+			Land("ground", agl);
+		if (agl < BLOCKED_HEIGHT && pos[1] > m_TargetY + 3)
+			m_Blocked += pDt;
+		else
+			m_Blocked = 0;
+		if (m_Blocked > 1.0)
+			Land("blocked", agl);
+
+		if (BR_Debug.LOG && m_Age - m_LogAt >= 2)
+		{
+			m_LogAt = m_Age;
+			Print("[BattleDayZ] chute (" + m_Player.GetInstanceType() + ") t " + m_Age + " agl " + agl + " y " + pos[1] + " target " + m_TargetY + " open " + m_Open + " input " + m_Speed + " " + m_Dir + " pre " + m_Pre + " post " + m_Post);
+		}
+	}
+
+	protected void Land(string why, float agl)
+	{
+		if (m_Landing)
+			return;
+		m_Landing = true; // finished next frame, in PreAnimUpdate
+		string who = "";
+		if (m_Player.GetIdentity())
+			who = m_Player.GetIdentity().GetName() + " ";
+		Print("[BattleDayZ] chute landing " + who + "(" + m_Player.GetInstanceType() + ") " + why + ", " + agl + " m up at " + m_Player.GetPosition());
+	}
+
+	override bool PostPhysUpdate(float pDt)
+	{
+		m_Post++;
+		return !m_Finished;
+	}
+}
+

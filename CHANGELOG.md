@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 - 2026-11-18
+
+- **No more crash on quitting:** every game that had seen a parachute jump, and every server,
+  crashed as it shut down. The game keeps a finished script command until its own shutdown,
+  and the jump's (or even one that does nothing) crashed it if its class was in the world
+  module (4_World), unloaded first; in 3_Game it doesn't. The jump's command is in 3_Game now.
+- **The round lets go of everything when the mission ends:** its timers, and the game objects
+  it holds (it had kept them until the program's final clean-up).
+- **`-brskip=` for the self-test:** leave out steps of the headless check (circles, hits,
+  guns, sky, lobbies, plane, chute, drop), for tracking down what one leaves behind.
+
 ## 0.5.1 - 2026-11-18
 
 - **Reload from your ammo, fixed:** in 0.4.1 and 0.5 the reload key never got to it (it was

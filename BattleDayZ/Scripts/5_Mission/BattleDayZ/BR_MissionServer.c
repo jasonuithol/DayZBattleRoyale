@@ -1,5 +1,11 @@
 modded class MissionServer
 {
+	override void OnMissionFinish()
+	{
+		BR_Round.Stop();
+		super.OnMissionFinish();
+	}
+
 	override void OnInit()
 	{
 		super.OnInit();
