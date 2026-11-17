@@ -11,13 +11,16 @@ modded class DayZPlayerCamera1stPersonUnconscious
 {
 	static const float BR_DISTANCE = 75;   // m from the plane
 	static const float BR_ABOVE = 8;
+	static const float BR_WATCH_DISTANCE = 5;  // m from a watched player
+	static const float BR_WATCH_ABOVE = 1;
 
 	protected float m_BR_Yaw;
 	protected float m_BR_Pitch = -15;
 
 	override void OnUpdate(float pDt, out DayZPlayerCameraResult pOutResult)
 	{
-		if (!BR_Plane.s_View)
+		bool watching = BR_Watch.s_On && !BR_Plane.s_View;
+		if (!BR_Plane.s_View && !watching)
 		{
 			super.OnUpdate(pDt, pOutResult);
 			return;
@@ -29,14 +32,24 @@ modded class DayZPlayerCamera1stPersonUnconscious
 		m_BR_Yaw += aim[0] * Math.RAD2DEG;
 		m_BR_Pitch = Math.Clamp(m_BR_Pitch + aim[1] * Math.RAD2DEG, -70, 30);
 
-		// the plane's frame: at the plane, facing where it flies
+		// the plane's frame: at the plane, facing where it flies; or, watching a player, at
+		// their head, the orbit north-up (the mouse turns it round them)
 		vector forward = BR_Plane.s_Vel;
 		forward[1] = 0;
-		if (forward.Length() < 0.1)
+		if (watching || forward.Length() < 0.1)
 			forward = "0 0 1";
 		vector owner[4];
 		Math3D.DirectionAndUpMatrix(forward.Normalized(), "0 1 0", owner);
-		owner[3] = BR_SeenPlane();
+		float distance = BR_DISTANCE;
+		float above = BR_ABOVE;
+		if (watching)
+		{
+			owner[3] = BR_Watch.Target() + "0 1.6 0";
+			distance = BR_WATCH_DISTANCE;
+			above = BR_WATCH_ABOVE;
+		}
+		else
+			owner[3] = BR_SeenPlane();
 		for (int i = 0; i < 4; i++)
 			pOutResult.m_OwnerTM[i] = owner[i];
 		pOutResult.m_bOwnerTMOverride = true;
@@ -46,7 +59,7 @@ modded class DayZPlayerCamera1stPersonUnconscious
 		Math3D.YawPitchRollMatrix(Vector(m_BR_Yaw, m_BR_Pitch, 0), rot);
 		for (int j = 0; j < 3; j++)
 			pOutResult.m_CameraTM[j] = rot[j];
-		pOutResult.m_CameraTM[3] = rot[2] * -BR_DISTANCE + Vector(0, BR_ABOVE, 0);
+		pOutResult.m_CameraTM[3] = rot[2] * -distance + Vector(0, above, 0);
 
 		pOutResult.m_fPositionModelSpace = 1.0;
 		pOutResult.m_fUseHeading = 0.0;
@@ -93,7 +106,7 @@ modded class DayZPlayerCameras
 	// the plane and the character
 	override static float OnCameraChange(DayZPlayer pPlayer, int pFrom, int pTo)
 	{
-		if ((pFrom == DAYZCAMERA_1ST_UNCONSCIOUS || pTo == DAYZCAMERA_1ST_UNCONSCIOUS) && BR_Plane.ViewRecent())
+		if ((pFrom == DAYZCAMERA_1ST_UNCONSCIOUS || pTo == DAYZCAMERA_1ST_UNCONSCIOUS) && (BR_Plane.ViewRecent() || BR_Watch.Recent()))
 			return 0;
 		return super.OnCameraChange(pPlayer, pFrom, pTo);
 	}

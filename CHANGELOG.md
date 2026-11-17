@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5 - 2026-11-17
+
+- **Watch the round when you're out:** knocked out (or joining) while a round is on, you watch
+  a player still in it, the camera orbiting them (the mouse turns it). F moves on to the next
+  player; past the last, back to the lobby, where F watches again. The server holds your own
+  character, unhurt, 150 m above whoever you watch, so your game has them and what's round
+  them. Everyone comes back to the lobby when the round ends.
+- **The lobby clock waits for players:** with nobody (or not enough players) in the lobby, the
+  countdown holds at its full time instead of running out and starting again, so whoever
+  arrives first sees all 3 minutes (5 after a server start), not whatever was left of a cycle.
+
 ## 0.4.1 - 2026-11-17
 
 - **Old lobbies really go:** the lobby's models are no longer sent to players. A static model

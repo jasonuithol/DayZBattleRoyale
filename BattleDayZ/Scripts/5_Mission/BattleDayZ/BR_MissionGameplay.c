@@ -160,7 +160,8 @@ modded class MissionGameplay
 		}
 	}
 
-	// F in the lobby says ready to start, F on the plane jumps, F in free fall opens the chute
+	// F in the lobby says ready to start (or, out of a round under way, watches the next player
+	// in it), F on the plane jumps, F in free fall opens the chute
 	// (not while typing in chat or in a menu); at most once a second while the server catches up. KeyState remembers a press
 	// until it's cleared, so it's cleared every time it's read.
 	protected void BR_JumpKey(BR_State state, bool falling)
@@ -169,7 +170,8 @@ modded class MissionGameplay
 		if (pressed)
 			ClearKey(KeyCode.KC_F);
 		bool lobby = state.phase == BR_Phase.LOBBY && !state.inRound;
-		if (!pressed || !(state.inPlane || falling || lobby) || GetGame().GetUIManager().GetMenu())
+		bool watch = state.phase == BR_Phase.GAME && !state.inRound && !state.inPlane;
+		if (!pressed || !(state.inPlane || falling || lobby || watch) || GetGame().GetUIManager().GetMenu())
 			return;
 		float now = GetGame().GetTickTime();
 		if (now - m_BR_JumpAsked < 1)

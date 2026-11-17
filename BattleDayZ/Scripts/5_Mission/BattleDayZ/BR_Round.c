@@ -188,12 +188,24 @@ class BR_Round
 				continue;
 			if (!InRound(player))
 				ResetInLobby(player);
+			if (!InRound(player) && Watch(player))
+				continue; // watching the round from above someone still in it
 			if (!InRound(player) || InPlane(player))
 				KeepInLobby(player);
 		}
 
 		if (m_Phase == BR_Phase.LOBBY && m_Settings.lobbyChangeSeconds > 0 && now - m_SkySince >= m_Settings.lobbyChangeSeconds && now < m_PhaseEnds - 10)
 			ChangeLobby();
+
+		// not enough players waiting (nobody, say): the clock holds at its full time, so whoever
+		// arrives first sees all of it (5 minutes after a server start, 3 between rounds)
+		if (m_Phase == BR_Phase.LOBBY && LobbyPlayers(men).Count() < Math.Max(1, m_Settings.minPlayers))
+		{
+			if (m_Round == 0)
+				m_PhaseEnds = now + m_Settings.firstLobbySeconds;
+			else
+				m_PhaseEnds = now + m_Settings.lobbySeconds;
+		}
 
 		// everyone waiting has pressed F: no need to wait out the clock
 		if (m_Phase == BR_Phase.LOBBY && now < m_PhaseEnds)
@@ -274,6 +286,78 @@ class BR_Round
 		BR_Loot.Kit(player);
 		m_LobbyReset.Set(id, player);
 		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " reset in the lobby");
+		// knocked out (or joined) while a round is on: straight to watching it
+		if (m_Phase == BR_Phase.GAME && !m_InPlane.Contains(id))
+			NextWatch(player);
+	}
+
+	// --- watching the round when out of it ---------------------------------------------
+	// Someone out of the round watches a player still in it: their own (new) character is held,
+	// unhurt, WATCH_ABOVE m above that player, so their game has them and what's round them, and
+	// their camera follows them (BR_PlaneCamera.c). F moves on to the next; past the last, back
+	// to the lobby (F there watches again). The round's end brings everyone back.
+
+	static const float WATCH_ABOVE = 150;
+	protected ref map<string, string> m_Watching = new map<string, string>(); // watcher id -> watched id
+
+	// the next player in the round to watch after the one being watched (none: back to the lobby)
+	void NextWatch(PlayerBase player)
+	{
+		string id = player.GetIdentity().GetId();
+		string current;
+		m_Watching.Find(id, current);
+		array<string> ids = new array<string>();
+		for (int i = 0; i < m_Alive.Count(); i++)
+		{
+			PlayerBase them = m_Alive.GetElement(i);
+			if (them && them.IsAlive() && m_Alive.GetKey(i) != id)
+				ids.Insert(m_Alive.GetKey(i));
+		}
+		ids.Sort();
+		string next = "";
+		if (current == "")
+		{
+			if (ids.Count() > 0)
+				next = ids[0];
+		}
+		else
+		{
+			int at = ids.Find(current);
+			if (at >= 0 && at + 1 < ids.Count())
+				next = ids[at + 1];
+			else if (at < 0 && ids.Count() > 0)
+				next = ids[0]; // the one watched is out: the first of the rest
+		}
+		if (next == "")
+		{
+			m_Watching.Remove(id);
+			Print("[BattleDayZ] " + player.GetIdentity().GetName() + " stops watching");
+			return;
+		}
+		m_Watching.Set(id, next);
+		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " watches " + m_Names.Get(next));
+	}
+
+	// hold a watcher above whoever they watch; false if they aren't watching (any more)
+	bool Watch(PlayerBase player)
+	{
+		string id = player.GetIdentity().GetId();
+		string target;
+		if (m_Phase != BR_Phase.GAME || !m_Watching.Find(id, target))
+		{
+			m_Watching.Remove(id);
+			return false;
+		}
+		PlayerBase them;
+		if (!m_Alive.Find(target, them) || !them || !them.IsAlive())
+		{
+			NextWatch(player);
+			if (!m_Watching.Find(id, target) || !m_Alive.Find(target, them) || !them)
+				return false;
+		}
+		player.SetAllowDamage(false);
+		player.SetPosition(them.GetPosition() + Vector(0, WATCH_ABOVE, 0));
+		return true;
 	}
 
 	void KeepInLobby(PlayerBase player)
@@ -622,9 +706,17 @@ class BR_Round
 		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");
 	}
 
-	// F: in the lobby, ready to start; out of the plane; or (falling) open the chute
+	// F: in the lobby, ready to start; out of the round, watch it (the next player); out of the
+	// plane; or (falling) open the chute
 	void OnJump(PlayerIdentity sender, vector seenPlane)
 	{
+		if (m_Phase == BR_Phase.GAME && sender && !m_Alive.Contains(sender.GetId()) && !m_InPlane.Contains(sender.GetId()))
+		{
+			PlayerBase watcher = PlayerBase.Cast(sender.GetPlayer());
+			if (watcher && watcher.IsAlive())
+				NextWatch(watcher);
+			return;
+		}
 		if (m_Phase == BR_Phase.LOBBY && sender && m_Ready.Find(sender.GetId()) < 0)
 		{
 			m_Ready.Insert(sender.GetId());
@@ -877,6 +969,7 @@ class BR_Round
 
 	void EndRound()
 	{
+		m_Watching.Clear(); // everyone watching comes back to the lobby
 		m_Phase = BR_Phase.ENDED;
 		m_PhaseEnds = Now() + m_Settings.winnerSeconds;
 		if (m_Alive.Count() == 1)
@@ -1032,6 +1125,25 @@ class BR_Round
 					state.subtitle = subtitle + ": you're ready";
 				else
 					state.subtitle = subtitle + ": press F when you're ready to start";
+			}
+			// out of the round: who they watch (or the key to start watching)
+			state.watching = "";
+			state.watchLow = 0;
+			state.watchHigh = 0;
+			state.watchPos = vector.Zero;
+			string watched;
+			PlayerBase them;
+			if (m_Phase == BR_Phase.GAME && !state.inRound && !state.inPlane)
+			{
+				if (m_Watching.Find(player.GetIdentity().GetId(), watched) && m_Alive.Find(watched, them) && them)
+				{
+					state.watching = m_Names.Get(watched);
+					them.GetNetworkID(state.watchLow, state.watchHigh);
+					state.watchPos = them.GetPosition();
+					state.subtitle = "Watching " + state.watching + " - " + subtitle + " | F: next player";
+				}
+				else
+					state.subtitle = subtitle + " | Press F to watch the round";
 			}
 			ScriptRPC rpc = new ScriptRPC();
 			state.Write(rpc);

@@ -45,6 +45,10 @@ class BR_State
 	float lobbyZ;      // own (lobbyRadius 0: a lobby from a file, all the server's)
 	float lobbyRadius;
 	float lobbyFloorY;
+	string watching;   // out of the round and watching this player ("": not watching)
+	int watchLow;      // that player's network id, for the camera to follow it in this game
+	int watchHigh;
+	vector watchPos;   // and where they are, until this game has them
 	vector lobbySlot0; // the places a lobby goes: lobbySlots of them, lobbyApart m apart
 	int lobbySlots;    // along x from lobbySlot0; anything left at one but lobbyAt is an old one
 	float lobbyApart;
@@ -71,6 +75,10 @@ class BR_State
 		ctx.Write(subtitle);
 		ctx.Write(lobbyAt);
 		ctx.Write(lobbyReach);
+		ctx.Write(watching);
+		ctx.Write(watchLow);
+		ctx.Write(watchHigh);
+		ctx.Write(watchPos);
 		ctx.Write(lobbyX);
 		ctx.Write(lobbyZ);
 		ctx.Write(lobbyRadius);
@@ -91,6 +99,8 @@ class BR_State
 		if (!ctx.Read(title) || !ctx.Read(subtitle))
 			return false;
 		if (!ctx.Read(lobbyAt) || !ctx.Read(lobbyReach))
+			return false;
+		if (!ctx.Read(watching) || !ctx.Read(watchLow) || !ctx.Read(watchHigh) || !ctx.Read(watchPos))
 			return false;
 		if (!ctx.Read(lobbyX) || !ctx.Read(lobbyZ) || !ctx.Read(lobbyRadius) || !ctx.Read(lobbyFloorY))
 			return false;
@@ -221,6 +231,47 @@ class BR_Steer
 	}
 }
 
+// Client: watching another player after being knocked out (the server holds this player's own
+// character, out of sight, above them, so this game has them and what's round them). The camera
+// follows them (BR_PlaneCamera.c), by their network id once this game has them.
+class BR_Watch
+{
+	static bool s_On;
+	static string s_Name;
+	static int s_Low;
+	static int s_High;
+	static vector s_Pos;
+	static float s_OffAt;
+
+	static void Seen(BR_State state)
+	{
+		bool on = state.watching != "";
+		if (s_On && !on)
+			s_OffAt = GetGame().GetTickTime();
+		s_On = on;
+		s_Name = state.watching;
+		s_Low = state.watchLow;
+		s_High = state.watchHigh;
+		s_Pos = state.watchPos;
+	}
+
+	// on, or only just switched off (the camera change back is still under way)
+	static bool Recent()
+	{
+		return s_On || GetGame().GetTickTime() - s_OffAt < 2;
+	}
+
+	// where the watched player is in this game (their position as the server last said, if
+	// this game hasn't got them yet)
+	static vector Target()
+	{
+		Object them = GetGame().GetObjectByNetworkId(s_Low, s_High);
+		if (them)
+			return them.GetPosition();
+		return s_Pos;
+	}
+}
+
 // Client: a lobby in the sky that's been taken down stays in this game (a server can't take
 // back a static model it sent; a game that joins later can still be sent one, or keep one from
 // before it reconnected), so this game clears the other places a lobby goes itself: every plain
@@ -288,7 +339,10 @@ modded class DayZGame
 				if (state.flying && !IsServer())
 					BR_Plane.Set(state.planePos, state.planeVel);
 				if (!IsServer())
+				{
 					BR_LobbyGhosts.Seen(state);
+					BR_Watch.Seen(state);
+				}
 			}
 			return;
 		}

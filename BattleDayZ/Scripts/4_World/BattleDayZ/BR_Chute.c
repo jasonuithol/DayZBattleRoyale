@@ -309,8 +309,8 @@ modded class PlayerBase
 	{
 		if (GetGame().GetPlayer() == this)
 		{
-			if (BR_Plane.s_View)
-				return DayZPlayerCameras.DAYZCAMERA_1ST_UNCONSCIOUS; // the plane view (BR_PlaneCamera.c)
+			if (BR_Plane.s_View || BR_Watch.s_On)
+				return DayZPlayerCameras.DAYZCAMERA_1ST_UNCONSCIOUS; // the plane view, or watching a player (BR_PlaneCamera.c)
 			if (BR_IsChuting())
 				return DayZPlayerCameras.DAYZCAMERA_3RD_ERC;
 		}

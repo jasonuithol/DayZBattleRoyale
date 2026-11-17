@@ -36,6 +36,11 @@ what comes later.
    hangar, a solar farm, an oil derrick, a fort, a wreck), otherwise out in the open, always on
    flat, clear, dry ground. The loot goes out a few buildings at a time over about 25 s, so
    the server never stalls.
+   Anyone knocked out (or joining) while a round is on watches it instead of waiting: the
+   camera follows a player still in the round (the mouse orbits it), F moves on to the next
+   and, past the last, back to the lobby (F there watches again). Their own character is held,
+   unhurt, 150 m above the player they watch, so their game has that player and what's round
+   them (only things within about a kilometre of a player's character reach their game).
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
    the same plain kit (T-shirt, jeans, trainers, work gloves, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
