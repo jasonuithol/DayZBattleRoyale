@@ -248,8 +248,7 @@ lobby`).
 ## Known limits
 
 - **Other players' steering:** only the jumper's own game and the server know their steering
-  keys, so other players may see a steering jumper corrected now and then. Not yet tried with
-  more than one player.
+  keys, so other players may see a steering jumper corrected now and then.
 - **No hands-up pose under the parachute:** gestures don't play while the jump controls the
   character.
 - **Test bots stand still:** they're only there to win or lose against.
