@@ -802,5 +802,17 @@ class BR_Loot
 			}
 		}
 		player.GetInventory().CreateInInventory("BandageDressing");
+		// the settings' kitExtras: "Class", or a gun with its magazine as "Gun|Magazine" (loaded)
+		foreach (string extra : s_KitExtras)
+		{
+			array<string> parts = new array<string>();
+			extra.Split("|", parts);
+			EntityAI thing = player.GetInventory().CreateInInventory(parts[0]);
+			Weapon_Base gun = Weapon_Base.Cast(thing);
+			if (gun && parts.Count() > 1)
+				gun.SpawnAttachedMagazine(parts[1]);
+		}
 	}
+
+	static ref array<string> s_KitExtras = new array<string>();
 }

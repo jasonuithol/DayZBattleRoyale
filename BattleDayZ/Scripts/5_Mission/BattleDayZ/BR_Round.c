@@ -134,6 +134,8 @@ class BR_Round
 		}
 
 		m_Lobby = FlatGround(m_Settings.lobbyX, m_Settings.lobbyZ);
+		if (m_Settings.kitExtras)
+			BR_Loot.s_KitExtras = m_Settings.kitExtras;
 		m_Map = BR_Maps.Current();
 		if (m_Settings.lobbies.Count() > 0)
 			m_LobbyNames.InsertAll(m_Settings.lobbies);
@@ -1457,7 +1459,10 @@ class BR_Round
 			if (pile && pile.IsAmmoPile())
 				loose += pile.GetAmmoCount();
 		}
-		Print("[BRTest] refill: found the magazine " + found + ", " + had + " rounds to hand (10 loose, 2 boxes of 20), " + added + " added: magazine " + mag.GetAmmoCount() + "/" + mag.GetAmmoMax() + " (30 expected), " + boxes + " boxes left (1 expected), " + loose + " loose rounds left (5 expected)");
+		string spare = "none";
+		if (mag)
+			spare = mag.GetAmmoCount().ToString() + "/" + mag.GetAmmoMax();
+		Print("[BRTest] refill: found the magazine on the gun " + found + ", " + had + " rounds to hand (10 loose, 2 boxes of 20), " + added + " into a new spare: " + spare + " (30/30 expected), " + boxes + " boxes left (1 expected), " + loose + " loose rounds left (0 expected)");
 	}
 
 	// what a hit of each candidate kind does to a fresh character (for the storm's cuts)
@@ -1484,8 +1489,25 @@ class BR_Round
 					int had = BR_Refill.Available(gunner, mag);
 					Weapon_Base held;
 					Magazine topped = BR_Refill.Topped(gunner, held);
-					int added = BR_Refill.Refill(gunner, mag);
-					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestRefillAfter, 500, false, gunner, mag, had, added, topped != null);
+					// the action the reload key runs: on the gun, first on that key, and possible now
+					array<ActionBase_Basic> onKey = new array<ActionBase_Basic>();
+					akm.GetActions(WeaponManipulationActionInput, onKey);
+					string first = "none";
+					if (onKey && onKey.Count() > 0)
+						first = onKey[0].ClassName();
+					ActionBase refill = gunner.GetActionManager().GetAction(BR_ActionRefillMagazine);
+					bool can = refill && refill.Can(gunner, new ActionTarget(null, null, -1, vector.Zero, -1), akm);
+					ActionBase vanilla = gunner.GetActionManager().GetAction(FirearmActionMechanicManipulate);
+					string order = "";
+					if (onKey)
+					{
+						foreach (ActionBase_Basic each : onKey)
+							order += " " + each.ClassName();
+					}
+					Print("[BRTest] refill action: on the reload key:" + order + "; registered " + (refill != null) + " (a vanilla one: " + (vanilla != null) + "), possible " + can + ", action manager " + gunner.GetActionManager());
+					int added;
+					Magazine spare = BR_Refill.FillSpare(gunner, mag, added);
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestRefillAfter, 500, false, gunner, spare, had, added, topped != null);
 				}
 				else
 					Print("[BRTest] refill: no magazine on the AKM");

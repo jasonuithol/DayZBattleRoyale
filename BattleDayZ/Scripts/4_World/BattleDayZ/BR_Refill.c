@@ -1,14 +1,17 @@
-// Reload refills the magazine: with a magazine on the gun that isn't full and ammo for it in
-// the inventory (loose rounds, or the boxes they come in, unopened), the reload key tops that
-// magazine up from it instead of swapping in another. With no ammo for it, reload is vanilla's.
+// Reload from your ammo: with a magazine on the gun that isn't full, ammo for it in the
+// inventory (loose rounds, or the boxes they come in, unopened) and no fuller magazine of that
+// kind to swap in, the reload key fills a spare magazine of the same kind from that ammo (the
+// one the last reload took off, or a new one) and swaps it in with vanilla's own reload. With
+// no ammo for it, or a spare already full enough, reload is vanilla's.
 //
-// The player's game asks (the reload key, PlayerBase.QuickReloadWeapon) and the server does it:
-// it takes the rounds from loose piles first, then from boxes (a box's rounds left over stay
-// in the inventory as a loose pile), and adds them to the magazine.
+// Not the magazine on the gun itself: a gun keeps its own count of what its magazine holds,
+// changed only by its own reload actions, so a server-side top-up there never reached the
+// player's game (it still showed it empty, and refused to fire). A magazine in the inventory
+// does sync. The weapon action (BR_ActionRefillMagazine, below) has the server fill the spare
+// (loose rounds first, then boxes; what's left of a box stays as loose rounds), then the
+// player's game swaps it in (vanilla's swap: the animation, and both sides in step).
 class BR_Refill
 {
-	static const int RPC = 1112670213; // "BR" + 5: client -> server, refill the magazine on this gun
-
 	// the magazine on the gun in this player's hands, if it isn't full
 	static Magazine Topped(PlayerBase player, out Weapon_Base gun)
 	{
@@ -19,6 +22,54 @@ class BR_Refill
 		if (!mag || mag.IsAmmoPile() || mag.GetAmmoCount() >= mag.GetAmmoMax())
 			return null;
 		return mag;
+	}
+
+	// a magazine of the same kind as the one on the gun, in the inventory (not on any gun):
+	// the fullest
+	static Magazine Spare(PlayerBase player, Magazine onGun)
+	{
+		array<EntityAI> items = new array<EntityAI>();
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+		Magazine best;
+		foreach (EntityAI item : items)
+		{
+			Magazine mag = Magazine.Cast(item);
+			if (!mag || mag == onGun || mag.GetType() != onGun.GetType() || Weapon_Base.Cast(mag.GetHierarchyParent()))
+				continue;
+			if (!best || mag.GetAmmoCount() > best.GetAmmoCount())
+				best = mag;
+		}
+		return best;
+	}
+
+	// server: the spare, filled from the ammo carried (a new, empty one first if there's none)
+	static Magazine FillSpare(PlayerBase player, Magazine onGun, out int added)
+	{
+		added = 0;
+		Magazine spare = Spare(player, onGun);
+		if (!spare)
+		{
+			spare = Magazine.Cast(player.GetInventory().CreateInInventory(onGun.GetType()));
+			if (!spare)
+				return null; // no room for one
+			spare.ServerSetAmmoCount(0);
+		}
+		added = Refill(player, spare);
+		return spare;
+	}
+
+	// the player's game, a moment after the server filled the spare: swap it in (vanilla's swap)
+	static void SwapIn(PlayerBase player)
+	{
+		if (!player || !player.IsAlive())
+			return;
+		Weapon_Base gun;
+		Magazine onGun = Topped(player, gun);
+		if (!onGun)
+			return;
+		Magazine spare = Spare(player, onGun);
+		if (spare && spare.GetAmmoCount() > onGun.GetAmmoCount() && player.GetWeaponManager().CanSwapMagazine(gun, spare))
+			player.GetWeaponManager().SwapMagazine(spare);
 	}
 
 	// the loose rounds that fit this magazine (its config's ammoItems[])
@@ -123,41 +174,89 @@ class BR_Refill
 	}
 }
 
-modded class PlayerBase
+// The reload key (UAReloadMagazine) runs whichever weapon action fits, in the order they were
+// added: this one goes first, ahead of vanilla's quick magazine swap. It ends straight away
+// (FirearmActionBase ends once the weapon isn't busy); the swap that follows is vanilla's.
+class BR_ActionRefillMagazine : FirearmActionBase
 {
-	// the reload key: refill the magazine on the gun if there's ammo for it, else vanilla's reload
-	override void QuickReloadWeapon(EntityAI weapon)
+	override bool HasTarget()
 	{
-		if (GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_CLIENT)
-		{
-			Weapon_Base gun;
-			Magazine mag = BR_Refill.Topped(this, gun);
-			if (mag && gun == weapon && BR_Refill.Available(this, mag) > 0)
-			{
-				ScriptRPC rpc = new ScriptRPC();
-				rpc.Send(this, BR_Refill.RPC, true, null);
-				return;
-			}
-		}
-		super.QuickReloadWeapon(weapon);
+		return false;
 	}
 
-	override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
+	override typename GetInputType()
 	{
-		if (rpc_type == BR_Refill.RPC)
+		return WeaponManipulationActionInput;
+	}
+
+	override void CreateConditionComponents()
+	{
+		m_ConditionItem = new CCINonRuined();
+		m_ConditionTarget = new CCTSelf();
+	}
+
+	override bool HasProgress()
+	{
+		return false;
+	}
+
+	override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
+	{
+		if (!super.ActionCondition(player, target, item))
+			return false;
+		Weapon_Base gun;
+		Magazine mag = BR_Refill.Topped(player, gun);
+		if (!mag || gun != item)
+			return false;
+		// a spare already fuller than this one: vanilla's own quick swap does it
+		Magazine spare = BR_Refill.Spare(player, mag);
+		if (spare && spare.GetAmmoCount() > mag.GetAmmoCount())
+			return false;
+		return BR_Refill.Available(player, mag) > 0;
+	}
+
+	override void Start(ActionData action_data)
+	{
+		super.Start(action_data);
+		PlayerBase player = action_data.m_Player;
+		if (!GetGame().IsServer())
 		{
-			if (GetGame().IsServer() && sender && GetIdentity() && sender.GetId() == GetIdentity().GetId() && IsAlive())
-			{
-				Weapon_Base gun;
-				Magazine mag = BR_Refill.Topped(this, gun);
-				if (mag)
-				{
-					int added = BR_Refill.Refill(this, mag);
-					Print("[BattleDayZ] " + sender.GetName() + " refilled " + mag.GetType() + " with " + added + " rounds, now " + mag.GetAmmoCount() + "/" + mag.GetAmmoMax());
-				}
-			}
+			// once the filled spare has reached this game: swap it in
+			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(BR_Refill.SwapIn, SWAP_AFTER_MS, false, player);
 			return;
 		}
-		super.OnRPC(sender, rpc_type, ctx);
+		Weapon_Base gun;
+		Magazine mag = BR_Refill.Topped(player, gun);
+		if (!mag)
+			return;
+		int added;
+		Magazine spare = BR_Refill.FillSpare(player, mag, added);
+		string who = "someone";
+		if (player.GetIdentity())
+			who = player.GetIdentity().GetName();
+		if (spare)
+			Print("[BattleDayZ] " + who + " refilled a spare " + spare.GetType() + " with " + added + " rounds, now " + spare.GetAmmoCount() + "/" + spare.GetAmmoMax());
+		else
+			Print("[BattleDayZ] " + who + " has no room for a spare " + mag.GetType());
+	}
+
+	static const int SWAP_AFTER_MS = 600;
+}
+
+modded class Weapon_Base
+{
+	override void SetActions()
+	{
+		AddAction(BR_ActionRefillMagazine); // first: ahead of vanilla's quick swap on the reload key
+		super.SetActions();
+	}
+}
+
+modded class ActionConstructor
+{
+	override void RegisterActions(TTypenameArray actions)
+	{
+		super.RegisterActions(actions);
+		actions.Insert(BR_ActionRefillMagazine);
 	}
 }

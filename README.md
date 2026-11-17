@@ -131,9 +131,10 @@ each mission's `db/economy.xml`). Each loot spot gets one of these:
 | 14% | Medical: a bandage (half the time), morphine, epinephrine (adrenaline: its usual boost, and health back to 100%) or the PO-X antidote (gas poisoning) |
 | 9% | A jerry can, half full. Vehicles start with 15% of a tank |
 
-Reloading a gun that has a magazine on it refills that magazine from the ammo you carry (loose
-rounds, then boxes of rounds, unopened) instead of swapping magazines; with no ammo for it,
-reload works as usual.
+Reloading a gun that takes magazines reloads from the ammo you carry: a spare magazine of the
+same kind (the one the last reload took off, or a new one) is filled from your loose rounds and
+then unopened boxes, and swapped in with the usual reload. With a fuller spare already, or no
+ammo for it, reload works as usual.
 
 ## Layout
 

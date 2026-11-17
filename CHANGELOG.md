@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 - 2026-11-18
+
+- **Reload from your ammo, fixed:** in 0.4.1 and 0.5 the reload key never got to it (it was
+  hooked onto a vanilla function nothing calls), and the top-up it did on the gun's own
+  magazine never reached the player's game (the gun keeps its own count of its magazine).
+  Now reload is a weapon action of its own: it fills a spare magazine of the same kind from
+  your loose rounds and unopened ammo boxes (the magazine the last reload took off, or a new
+  one) and swaps it in with vanilla's own reload, animation and all. With a fuller spare
+  already, or no ammo for it, reload is vanilla's.
+- **`kitExtras`:** more things everyone gets in the lobby's kit, for testing or events
+  ("Class", or "Gun|Magazine" for a loaded gun). Empty by default.
+
 ## 0.5 - 2026-11-17
 
 - **Watch the round when you're out:** knocked out (or joining) while a round is on, you watch

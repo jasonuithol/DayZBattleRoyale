@@ -26,6 +26,7 @@ class BR_Settings
 	ref array<string> vehicles;    // what spawns at the car spots, one entry per vehicle, equally likely:
 	                               // its colours as "A|B|C", one picked at random
 	float carFuel = 0.15;          // fraction of a full tank (boats too)
+	ref array<string> kitExtras;   // more things everyone gets in the lobby's kit (testing, events): class names
 	int boats = 0;                 // boats each round, at the map's vanilla boat spots (if it has any)
 	string boatTypes = "Boat_01_Orange|Boat_01_Blue|Boat_01_Black|Boat_01_Camo"; // one picked at random
 	int supplyDropSeconds = 240;   // a supply drop this often, inside the next circle (0: none)
