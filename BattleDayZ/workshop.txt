@@ -25,4 +25,4 @@ Players and the server both need: Community Framework, Dabs Framework, DayZ-Expa
 
 A Nasdara server also needs [b]BattleDayZ Nasdara[/b], and a Livonia server [b]BattleDayZ Livonia[/b] (server only, players don't need them), which hold those maps' own places for the lobby. Other maps can get the same kind of small add-on.
 
-The server also needs the battle royale mission for its map (Nasdara, Chernarus or Livonia), which holds the settings, the loot spots, and the Central Economy switched off. Solo only for now (no teams). Played and tested in about a dozen three-player rounds.
+The server also needs the battle royale mission for its map (Nasdara, Chernarus or Livonia), which holds the settings, the loot spots, and the Central Economy switched off. Solo only for now (no teams).
