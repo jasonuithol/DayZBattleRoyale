@@ -1,7 +1,8 @@
-// The plane at the start of a round: a straight route across the whole map, edge to edge,
-// through a point near the first circle's middle, at a fixed height clear of the hills under it. Where the plane is
-// comes from the clock (start + direction * speed * time); Expansion's airdrop plane flies
-// the same line so there's something to see.
+// The plane at the start of a round: a straight route between two random points on opposite
+// sides of the map (north to south, or west to east, either way), at a fixed height clear of
+// the hills under it. It has nothing to do with the circles. Where the plane is comes from the
+// clock (start + direction * speed * time); Expansion's airdrop plane flies the same line so
+// there's something to see.
 class BR_Flight
 {
 	vector from;      // the route, on the ground (y 0)
@@ -14,28 +15,35 @@ class BR_Flight
 
 	static const float EDGE_MARGIN = 100; // m in from the map's edge (Expansion removes a plane that leaves the map)
 
-	// a route right across the map, edge to edge, through a point near the circle's middle
-	static BR_Flight Plan(vector center, float radius, float worldSize, float height, float planeSpeed)
+	static BR_Flight Plan(float worldSize, float height, float planeSpeed)
 	{
 		BR_Flight f = new BR_Flight();
 		f.speed = planeSpeed;
 
-		// through a point within 30% of the radius of the middle, in a random direction
-		float a = Math.RandomFloat(0, Math.PI2);
-		float d = Math.Sqrt(Math.RandomFloat01()) * radius * 0.3;
-		vector p = center + Vector(Math.Cos(a) * d, 0, Math.Sin(a) * d);
-		float heading = Math.RandomFloat(0, Math.PI2);
-		f.dir = Vector(Math.Cos(heading), 0, Math.Sin(heading));
-
-		// where the line p + dir * t enters and leaves the map
-		float t0 = -1000000;
-		float t1 = 1000000;
-		Clip(p[0], f.dir[0], EDGE_MARGIN, worldSize - EDGE_MARGIN, t0, t1);
-		Clip(p[2], f.dir[2], EDGE_MARGIN, worldSize - EDGE_MARGIN, t0, t1);
-
-		f.from = p + f.dir * t0;
-		f.to = p + f.dir * t1;
-		f.length = Math.Max(t1 - t0, 1);
+		// a random point on each of two opposite sides
+		float lo = EDGE_MARGIN;
+		float hi = worldSize - EDGE_MARGIN;
+		float a = Math.RandomFloat(lo, hi);
+		float b = Math.RandomFloat(lo, hi);
+		if (Math.RandomIntInclusive(0, 1) == 0)
+		{
+			f.from = Vector(a, 0, lo); // south to north
+			f.to = Vector(b, 0, hi);
+		}
+		else
+		{
+			f.from = Vector(lo, 0, a); // west to east
+			f.to = Vector(hi, 0, b);
+		}
+		if (Math.RandomIntInclusive(0, 1) == 0)
+		{
+			vector swap = f.from;
+			f.from = f.to;
+			f.to = swap;
+		}
+		vector line = f.to - f.from;
+		f.length = Math.Max(line.Length(), 1);
+		f.dir = line * (1 / f.length);
 
 		// clear of the highest ground under the route
 		float top = 0;
@@ -46,17 +54,6 @@ class BR_Flight
 		}
 		f.altitude = top + height;
 		return f;
-	}
-
-	// narrows [t0, t1] to where p + dir * t stays within [lo, hi] on one axis
-	static void Clip(float p, float d, float lo, float hi, inout float t0, inout float t1)
-	{
-		if (Math.AbsFloat(d) < 0.0001)
-			return;
-		float ta = (lo - p) / d;
-		float tb = (hi - p) / d;
-		t0 = Math.Max(t0, Math.Min(ta, tb));
-		t1 = Math.Min(t1, Math.Max(ta, tb));
 	}
 
 	float Duration()

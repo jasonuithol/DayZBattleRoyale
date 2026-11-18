@@ -45,8 +45,8 @@ what comes later.
    the same plain kit (T-shirt, jeans, trainers, work gloves, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
    is set to the round's: morning, noon and night take turns, round after round (7:00, 12:00
-   and 23:00, `roundHours`). Expansion's plane crosses the whole map on a straight route, edge to edge,
-   through a point near the middle, 400 m above the highest ground under it. That takes 2 to 3
+   and 23:00, `roundHours`). Expansion's plane crosses the whole map on a straight route between two
+   random points on opposite sides of it (nothing to do with the circles), 400 m above the highest ground under it. That takes 2 to 3
    minutes (`planeSpeed`, `planeHeight`).
    - **The view:** players watch from behind the plane and can orbit it with the mouse. The
      character waits in the lobby meanwhile. The route and the plane are also drawn on the map
@@ -78,8 +78,8 @@ what comes later.
    everywhere and the last one alive wins.
    - **Where the circles go:** the point the last circle closes on is picked at the start of
      the round, any point of the map equally likely. The first circle contains it, and every
-     white circle after lies wholly inside the one before and contains it too, each centre
-     equally likely to be anywhere that does that. So the circles close in on a random spot, which
+     white circle after lies wholly inside the one before and contains it too. Every circle's
+     centre is on the map, equally likely to be anywhere that does all that. So the circles close in on a random spot, which
      could be anywhere, rather than drifting to the middle of the map.
    - **The map (M):**
      - It opens zoomed out, centred on you, or on the plane while you're on board.

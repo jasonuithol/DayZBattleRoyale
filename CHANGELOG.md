@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.4 - 2026-11-18
+
+- **The plane flies between two random points on opposite sides of the map** (north to south
+  or west to east, either way), nothing to do with the circles. Before, its route went through
+  a point near the first circle's middle, and when that middle was off the map (0.5.3) the
+  route was 1 m long: everyone was dropped off the map at once, where they couldn't move.
+- **Every circle's centre is on the map**, the first one too.
+
 ## 0.5.3 - 2026-11-18
 
 - **Morning, noon and night rounds:** each round starts at the next hour in `roundHours`,

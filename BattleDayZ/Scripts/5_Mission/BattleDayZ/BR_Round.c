@@ -627,7 +627,7 @@ class BR_Round
 
 		if (!m_Settings.testStorm)
 		{
-			m_Flight = BR_Flight.Plan(m_Center, m_Radius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
+			m_Flight = BR_Flight.Plan(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 			m_Flight.TakeOff(Now());
 			BR_Plane.Set(m_Flight.PositionAt(Now()), m_Flight.Velocity());
 		}
@@ -986,18 +986,27 @@ class BR_Round
 		return Math.Sqrt(dx * dx + dz * dz);
 	}
 
-	// keeps the first circle over the buildings: its centre at least r in from their edge, or in
-	// the middle when the circle is wider than the map (then it covers all of it)
-
 	// The first circle (firstCircle of the map's width across): it contains the place the last
-	// circle closes on, its centre equally likely to be anywhere that does. It isn't shown: at
-	// the start the whole map is safe.
+	// circle closes on, and its centre is on the map, equally likely to be anywhere that does
+	// both (final itself always does). It isn't shown: at the start the whole map is safe.
 	void FirstCircle(vector final, out vector center, out float radius)
 	{
 		radius = GetGame().GetWorld().GetWorldSize() * m_Settings.firstCircle * 0.5;
-		float angle = Math.RandomFloat(0, Math.PI2);
-		float dist = radius * Math.Sqrt(Math.RandomFloat01()); // even over the area
-		center = Vector(final[0] + Math.Cos(angle) * dist, 0, final[2] + Math.Sin(angle) * dist);
+		for (int i = 0; i < 200; i++)
+		{
+			float angle = Math.RandomFloat(0, Math.PI2);
+			float dist = radius * Math.Sqrt(Math.RandomFloat01()); // even over the area
+			center = Vector(final[0] + Math.Cos(angle) * dist, 0, final[2] + Math.Sin(angle) * dist);
+			if (OnMap(center))
+				return;
+		}
+		center = Vector(final[0], 0, final[2]);
+	}
+
+	static bool OnMap(vector p)
+	{
+		float size = GetGame().GetWorld().GetWorldSize();
+		return p[0] >= 0 && p[2] >= 0 && p[0] <= size && p[2] <= size;
 	}
 
 	// The place the last circle closes on, picked at the start of the round: every point of
@@ -1017,14 +1026,14 @@ class BR_Round
 		m_NextCenter = NextCenter(m_Center, m_Radius, m_NextRadius, m_Final);
 	}
 
-	// A centre for a circle of radius r, wholly inside the circle (center, radius) and containing
-	// `final` (itself inside that circle): anywhere within radius - r of center and within r of
-	// final, equally likely. Some always exists: final itself if it's within radius - r of center,
-	// else the point radius - r from center towards final.
+	// A centre for a circle of radius r, wholly inside the circle (center, radius), containing
+	// `final` (itself inside that circle) and on the map: anywhere within radius - r of center,
+	// within r of final and on the map, equally likely. Some always exists: the point r/radius of
+	// the way from final to center (both on the map, so it is too).
 	static vector NextCenter(vector center, float radius, float r, vector final)
 	{
 		float room = Math.Max(0, radius - r);
-		// tried at random in the smaller of the two discs, kept if it's in the other
+		// tried at random in the smaller of the two discs, kept if it's in the other and on the map
 		bool aroundFinal = r < room;
 		vector around = center;
 		float spread = room;
@@ -1038,14 +1047,13 @@ class BR_Round
 			float angle = Math.RandomFloat(0, Math.PI2);
 			float dist = spread * Math.Sqrt(Math.RandomFloat01()); // even over the area
 			vector p = around + Vector(Math.Cos(angle) * dist, 0, Math.Sin(angle) * dist);
-			if (BR_Loot.Distance2D(p, center) <= room && BR_Loot.Distance2D(p, final) <= r)
+			if (BR_Loot.Distance2D(p, center) <= room && BR_Loot.Distance2D(p, final) <= r && OnMap(p))
 				return p;
 		}
-		float apart = BR_Loot.Distance2D(final, center);
-		if (apart <= room)
-			return Vector(final[0], 0, final[2]);
-		vector toward = Vector(final[0] - center[0], 0, final[2] - center[2]) * (1 / apart);
-		return center + toward * room;
+		float t = 0;
+		if (radius > 0)
+			t = r / radius;
+		return Vector(final[0] + (center[0] - final[0]) * t, 0, final[2] + (center[2] - final[2]) * t);
 	}
 
 	void EndRound()
@@ -1391,11 +1399,10 @@ class BR_Round
 		if (!TestSkips("sky"))
 			SelfTestSky();
 
-		// the plane over the whole-map circle
-		vector mapCenter;
-		float mapRadius;
-		FirstCircle(PickFinal(), mapCenter, mapRadius);
-		BR_Flight flight = BR_Flight.Plan(mapCenter, mapRadius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
+		SelfTestRoutes();
+
+		// the plane
+		BR_Flight flight = BR_Flight.Plan(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 		int planesBefore = ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count();
 		if (!TestSkips("plane"))
 			flight.TakeOff(Now());
@@ -1454,6 +1461,33 @@ class BR_Round
 		ClearMarkers();
 	}
 
+	// the plane's route, many times over: from one side of the map to the opposite one, both
+	// ends on the map
+	void SelfTestRoutes()
+	{
+		float size = GetGame().GetWorld().GetWorldSize();
+		float lo = BR_Flight.EDGE_MARGIN;
+		float hi = size - BR_Flight.EDGE_MARGIN;
+		int rounds = 500;
+		int bad = 0;
+		int northSouth = 0;
+		float shortest = 1000000;
+		float total = 0;
+		for (int i = 0; i < rounds; i++)
+		{
+			BR_Flight f = BR_Flight.Plan(size, m_Settings.planeHeight, m_Settings.planeSpeed);
+			shortest = Math.Min(shortest, f.length);
+			total += f.length;
+			bool ns = (f.from[2] == lo && f.to[2] == hi) || (f.from[2] == hi && f.to[2] == lo);
+			bool we = (f.from[0] == lo && f.to[0] == hi) || (f.from[0] == hi && f.to[0] == lo);
+			if (ns)
+				northSouth++;
+			if (!(ns || we) || !OnMap(f.from) || !OnMap(f.to))
+				bad++;
+		}
+		Print("[BRTest] plane routes: " + rounds + " routes, " + bad + " not from one side of the map to the other (0 expected), " + northSouth + " north-south; shortest " + shortest + " m, average " + (total / rounds) + " m");
+	}
+
 	// the time each round starts at: roundHours in turn, and the world's clock set to it
 	void SelfTestRoundHours()
 	{
@@ -1472,7 +1506,8 @@ class BR_Round
 	}
 
 	// the circles' rules, over many simulated rounds: every circle (the first too) containing
-	// the final point, and every one after the first wholly inside the one before; and where the
+	// the final point and centred on the map, and every one after the first wholly inside the
+	// one before; and where the
 	// final points fall: evenly over the map, so about the same number in each quarter of it
 	void SelfTestCirclePicking()
 	{
@@ -1488,7 +1523,7 @@ class BR_Round
 			vector first;
 			float firstRadius;
 			FirstCircle(final, first, firstRadius);
-			if (BR_Loot.Distance2D(first, final) > firstRadius + 0.01)
+			if (BR_Loot.Distance2D(first, final) > firstRadius + 0.01 || !OnMap(first))
 				broken++;
 			int q = 0;
 			if (final[0] >= size / 2)
@@ -1504,7 +1539,7 @@ class BR_Round
 				if (next < m_Settings.circleMinRadius)
 					break;
 				vector nc = NextCenter(c, r, next, final);
-				if (BR_Loot.Distance2D(nc, c) > r - next + 0.01 || BR_Loot.Distance2D(nc, final) > next + 0.01)
+				if (BR_Loot.Distance2D(nc, c) > r - next + 0.01 || BR_Loot.Distance2D(nc, final) > next + 0.01 || !OnMap(nc))
 					broken++;
 				if (r - next > 1)
 					centreBias += BR_Loot.Distance2D(nc, c) / (r - next);
