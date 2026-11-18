@@ -5,6 +5,9 @@
 2545327648 @DabsFramework
 2116157322 @DayZ-Expansion-Licensed
 2291785308 @DayZ-Expansion-Core
+# the main Expansion mod: the killfeed, death screen, player list, street lamps, autorun and
+# earplugs (the server's ExpansionMod/Settings/GeneralSettings.json, shared with uber-everything)
+2116151222 @DayZ-Expansion
 2792984722 @DayZ-Expansion-Navigation
 2792984177 @DayZ-Expansion-Missions
 2291785437 @DayZ-Expansion-Vehicles
