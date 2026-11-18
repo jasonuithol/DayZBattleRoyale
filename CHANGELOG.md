@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.3 - 2026-11-18
+
+- **Morning, noon and night rounds:** each round starts at the next hour in `roundHours`,
+  taking turns: 7:00, then 12:00, then 23:00, then 7:00 again. Before, every round was at noon.
+- **Circles close in on a random spot:** the point the last circle closes on is picked at the
+  start of the round, any point of the map equally likely. The first circle contains it, and
+  every circle after lies wholly inside the one before and contains it too, each centre
+  equally likely to be anywhere that does that. Before, the first circle was always in the
+  middle of the map and each next one off-centre by at most half of what would fit, picked so
+  it favoured the middle: the circles drifted to the middle of the map.
+- **The first circle is half the map's width across** (`firstCircle` 0.5, as a share of the
+  map's width), placed round that point; `startRadius` and `circleDrift` are gone.
+
 ## 0.5.2 - 2026-11-18
 
 - **No more crash on quitting:** every game that had seen a parachute jump, and every server,

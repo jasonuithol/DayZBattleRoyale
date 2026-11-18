@@ -16,8 +16,10 @@ class BR_Settings
 	                               // lobbies/<name>.json (tools/make_lobby.py). Empty: all of the map's own
 	float lobbyHeight = 1000;      // m above the ground (0: the lobby is on the ground, at lobbyX/lobbyZ)
 	int lobbyChangeSeconds = 0;    // also change it this often while players wait (0: only between rounds)
-	float startRadius = 8000;      // the first circle: all of Nasdara (its buildings cover about 13 x 14 km)
-	float circleDrift = 0.5;       // how far off-centre each next circle can be: 0 always centred, 1 anywhere inside
+	ref array<int> roundHours;     // the time each round starts at, taking turns: hours (0-23), in
+	                               // order, round after round (default morning, noon, night: 7, 12, 23)
+	float firstCircle = 0.5;       // the first circle's width, as a share of the map's (it's placed to
+	                               // hold the point the last circle closes on, picked anywhere on the map)
 	int lootBuildings = 6000;      // buildings inside the first circle that get loot (bigger ones get up to 4 piles)
 	int cars = 100;                // vehicles, spread evenly over the whole map (none near the lobby):
 	float carSquare = 1365;        // it's tiled with squares about this size (m), lined up with its
@@ -80,6 +82,9 @@ class BR_Settings
 		else
 			Print("[BattleDayZ] no " + FILE + " - using the defaults");
 
+		array<int> hours = {7, 12, 23};
+		if (!s.roundHours || s.roundHours.Count() == 0)
+			s.roundHours = hours;
 		array<int> seconds = {300, 240, 180, 120, 60, 30};
 		array<float> fractions = {0.7, 0.65, 0.6, 0.55, 0.5, 0.4, 0.5};
 		array<float> damage = {1, 1, 2, 4, 6, 8, 10};

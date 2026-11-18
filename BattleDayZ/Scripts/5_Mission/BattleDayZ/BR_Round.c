@@ -65,6 +65,7 @@ class BR_Round
 	protected float m_FromRadius;
 	protected vector m_NextCenter;
 	protected float m_NextRadius;
+	protected vector m_Final;       // where the last circle closes: picked with the first circle
 	// the circle (see BR_Settings.circleSeconds): cooldown -> reveal -> notification -> close,
 	// the closing running through the next circle's cooldown
 	protected int m_Circle;       // which circle: 0 the first
@@ -558,12 +559,11 @@ class BR_Round
 	void PrepareRound()
 	{
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
-		float r = m_Settings.startRadius;
-		BR_Building anchor = m_Spots.buildings.GetRandomElement();
-		float cx = OnMap(anchor.x, m_MinX, m_MaxX, r);
-		float cz = OnMap(anchor.z, m_MinZ, m_MaxZ, r);
-		m_Center = Vector(cx, 0, cz);
+		m_Final = PickFinal();
+		float r;
+		FirstCircle(m_Final, m_Center, r);
 		m_Radius = r;
+		Print("[BattleDayZ] the last circle will close at " + m_Final);
 
 		m_LootQueue = BR_Loot.BuildingsInside(m_Spots, m_Center, r);
 		m_LootNext = 0;
@@ -599,6 +599,23 @@ class BR_Round
 
 	// --- starting a round: everyone in the lobby onto the plane ------------------------
 
+	// the hour round number `round` (1, 2, ...) starts at
+	int RoundHour(int round)
+	{
+		array<int> hours = m_Settings.roundHours;
+		return hours[(round - 1) % hours.Count()];
+	}
+
+	// the time of day the round starts at, taking turns (roundHours: morning, noon, night)
+	void SetRoundTime(int round)
+	{
+		int startHour = RoundHour(round);
+		int year, month, day, hour, minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+		GetGame().GetWorld().SetDate(year, month, day, startHour, 0);
+		Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00");
+	}
+
 	void StartRound(array<Man> men)
 	{
 		m_Grounded.Clear(); // back up in the sky next time
@@ -606,10 +623,7 @@ class BR_Round
 		m_Falls.Clear();
 		m_Round++;
 
-		// noon, every round
-		int year, month, day, hour, minute;
-		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
-		GetGame().GetWorld().SetDate(year, month, day, 12, 0);
+		SetRoundTime(m_Round);
 
 		if (!m_Settings.testStorm)
 		{
@@ -882,7 +896,7 @@ class BR_Round
 			if (m_NextRadius < m_Settings.circleMinRadius)
 			{
 				m_NextRadius = 0;
-				m_NextCenter = m_Center;
+				m_NextCenter = m_Final; // the last circle closes on the place picked at the start
 			}
 			m_Revealed = true;
 			m_StageStarted = now;
@@ -974,21 +988,64 @@ class BR_Round
 
 	// keeps the first circle over the buildings: its centre at least r in from their edge, or in
 	// the middle when the circle is wider than the map (then it covers all of it)
-	static float OnMap(float value, float min, float max, float r)
+
+	// The first circle (firstCircle of the map's width across): it contains the place the last
+	// circle closes on, its centre equally likely to be anywhere that does. It isn't shown: at
+	// the start the whole map is safe.
+	void FirstCircle(vector final, out vector center, out float radius)
 	{
-		if (min + r >= max - r)
-			return (min + max) * 0.5;
-		return Math.Clamp(value, min + r, max - r);
+		radius = GetGame().GetWorld().GetWorldSize() * m_Settings.firstCircle * 0.5;
+		float angle = Math.RandomFloat(0, Math.PI2);
+		float dist = radius * Math.Sqrt(Math.RandomFloat01()); // even over the area
+		center = Vector(final[0] + Math.Cos(angle) * dist, 0, final[2] + Math.Sin(angle) * dist);
 	}
 
-	// the next circle: smaller, wholly inside the current one, and off-centre by at most
-	// circleDrift of the most that would still fit (so nobody has to cross the whole circle)
+	// The place the last circle closes on, picked at the start of the round: every point of
+	// the map equally likely.
+	static vector PickFinal()
+	{
+		float size = GetGame().GetWorld().GetWorldSize();
+		return Vector(Math.RandomFloat(0, size), 0, Math.RandomFloat(0, size));
+	}
+
+	// the next circle: `fraction` of the current one's size, wholly inside it, and containing the
+	// place the last circle closes (m_Final). Its centre is equally likely to be anywhere that
+	// does both (so the circles don't drift to the middle of the map).
 	void PickNext(float fraction)
 	{
 		m_NextRadius = m_Radius * fraction;
-		float angle = Math.RandomFloat(0, Math.PI2);
-		float dist = Math.RandomFloat(0, (m_Radius - m_NextRadius) * m_Settings.circleDrift);
-		m_NextCenter = m_Center + Vector(Math.Cos(angle) * dist, 0, Math.Sin(angle) * dist);
+		m_NextCenter = NextCenter(m_Center, m_Radius, m_NextRadius, m_Final);
+	}
+
+	// A centre for a circle of radius r, wholly inside the circle (center, radius) and containing
+	// `final` (itself inside that circle): anywhere within radius - r of center and within r of
+	// final, equally likely. Some always exists: final itself if it's within radius - r of center,
+	// else the point radius - r from center towards final.
+	static vector NextCenter(vector center, float radius, float r, vector final)
+	{
+		float room = Math.Max(0, radius - r);
+		// tried at random in the smaller of the two discs, kept if it's in the other
+		bool aroundFinal = r < room;
+		vector around = center;
+		float spread = room;
+		if (aroundFinal)
+		{
+			around = final;
+			spread = r;
+		}
+		for (int i = 0; i < 200; i++)
+		{
+			float angle = Math.RandomFloat(0, Math.PI2);
+			float dist = spread * Math.Sqrt(Math.RandomFloat01()); // even over the area
+			vector p = around + Vector(Math.Cos(angle) * dist, 0, Math.Sin(angle) * dist);
+			if (BR_Loot.Distance2D(p, center) <= room && BR_Loot.Distance2D(p, final) <= r)
+				return p;
+		}
+		float apart = BR_Loot.Distance2D(final, center);
+		if (apart <= room)
+			return Vector(final[0], 0, final[2]);
+		vector toward = Vector(final[0] - center[0], 0, final[2] - center[2]) * (1 / apart);
+		return center + toward * room;
 	}
 
 	void EndRound()
@@ -1198,6 +1255,7 @@ class BR_Round
 		BR_Building anchor = m_Spots.buildings.GetRandomElement();
 		m_Center = Vector(anchor.x, 0, anchor.z);
 		m_Radius = 1500;
+		m_Final = m_Center; // (this test's circle is a small one round a building)
 		int buildings = BR_Loot.Buildings(m_Spots, m_Center, m_Radius, 300, m_Spawned);
 		int items = m_Spawned.Count();
 		int cars = BR_Loot.Cars(m_Spots, m_Center, 4000, 10, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
@@ -1334,8 +1392,10 @@ class BR_Round
 			SelfTestSky();
 
 		// the plane over the whole-map circle
-		vector mapCenter = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
-		BR_Flight flight = BR_Flight.Plan(mapCenter, m_Settings.startRadius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
+		vector mapCenter;
+		float mapRadius;
+		FirstCircle(PickFinal(), mapCenter, mapRadius);
+		BR_Flight flight = BR_Flight.Plan(mapCenter, mapRadius, GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 		int planesBefore = ExpansionAirdropPlaneBase.s_Expansion_AirdropPlanes.Count();
 		if (!TestSkips("plane"))
 			flight.TakeOff(Now());
@@ -1365,9 +1425,14 @@ class BR_Round
 		array<int> real = m_Settings.circleSeconds;
 		array<int> quick = {10, 8, 6, 4, 2, 1};
 		m_Settings.circleSeconds = quick;
-		vector center = Vector(OnMap(0, m_MinX, m_MaxX, m_Settings.startRadius), 0, OnMap(0, m_MinZ, m_MaxZ, m_Settings.startRadius));
+		vector center;
+		float firstRadius;
+		m_Final = PickFinal();
+		FirstCircle(m_Final, center, firstRadius);
 		m_Center = center;
-		m_Radius = m_Settings.startRadius;
+		m_Radius = firstRadius;
+		SelfTestCirclePicking();
+		SelfTestRoundHours();
 		m_Circle = 0;
 		m_WholeMap = true;
 		m_Revealed = false;
@@ -1387,6 +1452,68 @@ class BR_Round
 		m_Closing = false;
 		m_Revealed = false;
 		ClearMarkers();
+	}
+
+	// the time each round starts at: roundHours in turn, and the world's clock set to it
+	void SelfTestRoundHours()
+	{
+		int year, month, day, hour, minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+		string seen = "";
+		for (int round = 1; round <= 6; round++)
+		{
+			SetRoundTime(round);
+			int y, mo, d, h, mi;
+			GetGame().GetWorld().GetDate(y, mo, d, h, mi);
+			seen += " " + h + ":" + mi;
+		}
+		GetGame().GetWorld().SetDate(year, month, day, hour, minute);
+		Print("[BRTest] round hours: rounds 1-6 start at" + seen + " (roundHours " + m_Settings.roundHours.Count() + " hours, taking turns)");
+	}
+
+	// the circles' rules, over many simulated rounds: every circle (the first too) containing
+	// the final point, and every one after the first wholly inside the one before; and where the
+	// final points fall: evenly over the map, so about the same number in each quarter of it
+	void SelfTestCirclePicking()
+	{
+		int rounds = 300;
+		int broken = 0;
+		array<int> quarters = {0, 0, 0, 0};
+		float size = GetGame().GetWorld().GetWorldSize();
+		int steps = 0;
+		float centreBias = 0; // how far each circle's centre is from the one before, as a share of the room it had
+		for (int n = 0; n < rounds; n++)
+		{
+			vector final = PickFinal();
+			vector first;
+			float firstRadius;
+			FirstCircle(final, first, firstRadius);
+			if (BR_Loot.Distance2D(first, final) > firstRadius + 0.01)
+				broken++;
+			int q = 0;
+			if (final[0] >= size / 2)
+				q += 1;
+			if (final[2] >= size / 2)
+				q += 2;
+			quarters[q] = quarters[q] + 1;
+			vector c = first;
+			float r = firstRadius;
+			for (int k = 0; k < 40; k++)
+			{
+				float next = r * m_Settings.CircleFraction(k);
+				if (next < m_Settings.circleMinRadius)
+					break;
+				vector nc = NextCenter(c, r, next, final);
+				if (BR_Loot.Distance2D(nc, c) > r - next + 0.01 || BR_Loot.Distance2D(nc, final) > next + 0.01)
+					broken++;
+				if (r - next > 1)
+					centreBias += BR_Loot.Distance2D(nc, c) / (r - next);
+				steps++;
+				c = nc;
+				r = next;
+			}
+		}
+		Print("[BRTest] circle picking: " + rounds + " rounds, " + steps + " circles, " + broken + " breaking the rules (0 expected); final points in each quarter of the map (SW SE NW NE): " + quarters[0] + " " + quarters[1] + " " + quarters[2] + " " + quarters[3] + " (about 75 each for an even spread); a circle's centre on average " + (centreBias / steps) + " of the way to the edge of its room");
 	}
 
 	// the lobby in the sky: what got built, where players appear, that the floor holds someone

@@ -21,8 +21,8 @@ what comes later.
    waiting has pressed F to say they're ready, the round starts as soon as its loot is out. New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
-   diseases, food and water). Meanwhile the next round is got ready: an 8 km circle (radius), which covers the whole
-   map, with loot in 6,000 buildings inside it (1 to 4 piles each, by size, about 25,000
+   diseases, food and water). Meanwhile the next round is got ready: the first circle, half the map's width across (`firstCircle`), with loot in up to 6,000
+   buildings inside it (1 to 4 piles each, by size, about 25,000
    items) and 100 vehicles spread evenly over the whole map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
@@ -44,7 +44,8 @@ what comes later.
 2. **The plane.** When the clock runs out, everyone in the lobby is stripped, healed and given
    the same plain kit (T-shirt, jeans, trainers, work gloves, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
-   is set to noon. Expansion's plane crosses the whole map on a straight route, edge to edge,
+   is set to the round's: morning, noon and night take turns, round after round (7:00, 12:00
+   and 23:00, `roundHours`). Expansion's plane crosses the whole map on a straight route, edge to edge,
    through a point near the middle, 400 m above the highest ground under it. That takes 2 to 3
    minutes (`planeSpeed`, `planeHeight`).
    - **The view:** players watch from behind the plane and can orbit it with the mouse. The
@@ -72,14 +73,18 @@ what comes later.
 
    Cooldown and notification are each 5 minutes for the first circle, then 4, 3, 2, 1 and then
    30 seconds for every circle after (`circleSeconds`). Each white circle is 70%, 65%, 60%,
-   55%, 50%, 40%, then 50% of the one before, starting at 5.6 km. One smaller than 25 m becomes
+   55%, 50%, 40%, then 50% of the one before, starting at 70% of the first circle. One smaller than 25 m becomes
    nothing: once the red has closed to nothing, about 35 minutes into the round, the storm is
    everywhere and the last one alive wins.
+   - **Where the circles go:** the point the last circle closes on is picked at the start of
+     the round, any point of the map equally likely. The first circle contains it, and every
+     white circle after lies wholly inside the one before and contains it too, each centre
+     equally likely to be anywhere that does that. So the circles close in on a random spot, which
+     could be anywhere, rather than drifting to the middle of the map.
    - **The map (M):**
      - It opens zoomed out, centred on you, or on the plane while you're on board.
      - The circles are real lines over Expansion's map. There's only ever one white circle.
        The red one glides as it closes.
-     - The next circle's centre has a "Safe zone" marker, which you can also see in the world.
    - **The compass:** Expansion's compass across the top of the screen, for everyone.
    - **The storm (outside the circle):**
      - **Inside it:** you get what a vanilla gas zone does to a player standing in it: gas
@@ -110,7 +115,7 @@ Three settings in `battleroyale.json`, all off by default, shorten a test:
 
 - `testStorm`: no plane. Everyone starts on the ground 150 m outside the first white circle,
   with the red 400 m out and closing on it over at most 60 s. Damage is on straight away.
-- `testWhiteRadius`: with `testStorm`, the first white circle's radius instead of 5.6 km. With
+- `testWhiteRadius`: with `testStorm`, the first white circle's radius instead of 70% of the first circle. With
   50 and `circleSeconds` of `[30]`, a round reaches the end game in about 2.5 minutes.
 - `testBots`: this many AI survivors join every round, kitted like everyone else, in the
   middle of the first white circle. They count as players, so a round with a bot is won or
