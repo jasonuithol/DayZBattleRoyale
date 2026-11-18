@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5 - 2026-11-18
+
+- **Bright nights:** a night round is under a full moon in a clear sky. The date moves to the
+  night of the month with the brightest moon at that hour, and clouds, rain and fog are
+  cleared for an hour.
+
 ## 0.5.4 - 2026-11-18
 
 - **The plane flies between two random points on opposite sides of the map** (north to south

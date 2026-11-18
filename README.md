@@ -45,7 +45,8 @@ what comes later.
    the same plain kit (T-shirt, jeans, trainers, work gloves, a military belt with a pistol holster on it,
    and a bandage), and put on the plane. The time
    is set to the round's: morning, noon and night take turns, round after round (7:00, 12:00
-   and 23:00, `roundHours`). Expansion's plane crosses the whole map on a straight route between two
+   and 23:00, `roundHours`). A night round is a bright one: the date moves to the night of
+   the month with the fullest moon, and the sky is cleared (no clouds, rain or fog) for an hour. Expansion's plane crosses the whole map on a straight route between two
    random points on opposite sides of it (nothing to do with the circles), 400 m above the highest ground under it. That takes 2 to 3
    minutes (`planeSpeed`, `planeHeight`).
    - **The view:** players watch from behind the plane and can orbit it with the mouse. The

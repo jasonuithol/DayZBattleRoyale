@@ -613,8 +613,41 @@ class BR_Round
 		int year, month, day, hour, minute;
 		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
 		GetGame().GetWorld().SetDate(year, month, day, startHour, 0);
-		Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00");
+		if (!GetGame().GetWorld().IsNight())
+		{
+			Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00");
+			return;
+		}
+
+		// a night round: a bright one, under a full moon in a clear sky. The night of the month
+		// (days 1 to 28, so every month has them) with the brightest moon at that hour.
+		int fullDay = day;
+		float brightest = -1;
+		for (int d = 1; d <= 28; d++)
+		{
+			GetGame().GetWorld().SetDate(year, month, d, startHour, 0);
+			float moon = GetGame().GetWorld().GetMoonIntensity();
+			if (moon > brightest)
+			{
+				brightest = moon;
+				fullDay = d;
+			}
+		}
+		GetGame().GetWorld().SetDate(year, month, fullDay, startHour, 0);
+		ClearSky();
+		Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00, a night: day " + fullDay + " of the month, moon " + brightest + ", clear sky");
 	}
+
+	// no clouds, rain or fog, for the next hour (the weather then changes as usual)
+	static void ClearSky()
+	{
+		Weather weather = GetGame().GetWeather();
+		weather.GetOvercast().Set(0, 0, CLEAR_SKY_SECONDS);
+		weather.GetRain().Set(0, 0, CLEAR_SKY_SECONDS);
+		weather.GetFog().Set(0, 0, CLEAR_SKY_SECONDS);
+	}
+
+	static const float CLEAR_SKY_SECONDS = 3600;
 
 	void StartRound(array<Man> men)
 	{
@@ -1501,6 +1534,14 @@ class BR_Round
 			GetGame().GetWorld().GetDate(y, mo, d, h, mi);
 			seen += " " + h + ":" + mi;
 		}
+		// the moon over the nights of this month, at the night hour
+		string moons = "";
+		for (int night = 1; night <= 28; night += 3)
+		{
+			GetGame().GetWorld().SetDate(year, month, night, RoundHour(3), 0);
+			moons += " " + night + ":" + GetGame().GetWorld().GetMoonIntensity();
+		}
+		Print("[BRTest] moon at " + RoundHour(3) + ":00 by day of the month:" + moons + "; overcast now " + GetGame().GetWeather().GetOvercast().GetActual() + " (forecast " + GetGame().GetWeather().GetOvercast().GetForecast() + ")");
 		GetGame().GetWorld().SetDate(year, month, day, hour, minute);
 		Print("[BRTest] round hours: rounds 1-6 start at" + seen + " (roundHours " + m_Settings.roundHours.Count() + " hours, taking turns)");
 	}
