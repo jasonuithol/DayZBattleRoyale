@@ -68,7 +68,19 @@ modded class ExpansionMapMenu
 		m_BR_Canvas.Clear();
 
 		BR_State state = BR_Client.s_State;
-		if (!state || GetGame().GetTickTime() - BR_Client.s_ReceivedAt > 5 || state.phase == BR_Phase.LOBBY)
+		if (!state || GetGame().GetTickTime() - BR_Client.s_ReceivedAt > 5)
+			return;
+
+		// testing (testShowVehicles): every car (orange square) and boat (cyan diamond)
+		for (int v = 0; v < state.vehicles.Count(); v++)
+		{
+			if (state.vehicleIsBoat[v])
+				BR_Marker(state.vehicles[v], true, ARGB(255, 60, 220, 255));
+			else
+				BR_Marker(state.vehicles[v], false, ARGB(255, 255, 150, 40));
+		}
+
+		if (state.phase == BR_Phase.LOBBY)
 			return;
 
 		// the next circle, once it's announced, in white. The current one (the edge of the storm)
@@ -89,6 +101,15 @@ modded class ExpansionMapMenu
 				BR_Circle(state.center, state.radius, 3, ARGB(255, 245, 200, 40));
 			else
 				BR_Circle(state.center, state.radius, 2, ARGB(255, 255, 255, 255));
+		}
+
+		// testing (testShowFinal): where the last circle closes, a magenta cross in a ring
+		if (state.finalPos != vector.Zero)
+		{
+			int magenta = ARGB(255, 255, 60, 220);
+			BR_Line(state.finalPos + Vector(-150, 0, -150), state.finalPos + Vector(150, 0, 150), 3, magenta);
+			BR_Line(state.finalPos + Vector(-150, 0, 150), state.finalPos + Vector(150, 0, -150), 3, magenta);
+			BR_Circle(state.finalPos, 200, 2, magenta);
 		}
 
 		if (state.flying)
@@ -160,6 +181,30 @@ modded class ExpansionMapMenu
 			BR_Draw2D(prev, next, width, color);
 			prev = next;
 		}
+	}
+
+	// a small mark, a fixed size on screen: a diamond, or a square
+	protected void BR_Marker(vector pos, bool diamond, int color)
+	{
+		vector c = BR_ToCanvas(pos);
+		float s = 6;
+		array<vector> corners = new array<vector>();
+		if (diamond)
+		{
+			corners.Insert(c + Vector(0, -s, 0));
+			corners.Insert(c + Vector(s, 0, 0));
+			corners.Insert(c + Vector(0, s, 0));
+			corners.Insert(c + Vector(-s, 0, 0));
+		}
+		else
+		{
+			corners.Insert(c + Vector(-s, -s, 0));
+			corners.Insert(c + Vector(s, -s, 0));
+			corners.Insert(c + Vector(s, s, 0));
+			corners.Insert(c + Vector(-s, s, 0));
+		}
+		for (int i = 0; i < 4; i++)
+			BR_Draw2D(corners[i], corners[(i + 1) % 4], 2, color);
 	}
 
 	// an arrowhead pointing the way the plane flies, a fixed size on screen

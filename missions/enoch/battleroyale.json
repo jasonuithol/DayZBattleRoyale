@@ -9,7 +9,8 @@
     "lobbyHeight": 1000,
     "lobbyChangeSeconds": 0,
     "roundHours": [7, 12, 23],
-    "firstCircle": 0.5,
+    "firstCircle": 1.0,
+    "lampsLit": 1.0,
     "lootBuildings": 6000,
     "cars": 100,
     "carSquare": 1365,
@@ -23,6 +24,8 @@
     "circleDamage": [1, 1, 2, 4, 6, 8, 10],
     "circleMinRadius": 25,
     "testStorm": false,
+    "testShowFinal": false,
+    "testShowVehicles": false,
     "testWhiteRadius": 0,
     "testBots": 0
 }

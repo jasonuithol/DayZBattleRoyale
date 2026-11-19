@@ -22,6 +22,7 @@ modded class MissionGameplay
 	static const int BR_PANELS = 60;           // panels either side of the nearest point (1.2 km of wall)
 	protected float m_BR_JumpAsked;
 	protected float m_BR_LeftPlaneAt;
+	protected float m_BR_BoardLogAt;
 
 	override void OnMissionStart()
 	{
@@ -130,7 +131,7 @@ modded class MissionGameplay
 		float now = GetGame().GetTickTime();
 		if (player && player.IsAlive())
 		{
-			if (state.inPlane && state.flying)
+			if (state.inPlane && state.flying && !state.boarding)
 			{
 				riding = true;
 				m_BR_LeftPlaneAt = 0;
@@ -145,6 +146,20 @@ modded class MissionGameplay
 		if (BR_Plane.s_View != riding)
 			Print("[BattleDayZ] plane view " + riding);
 		BR_Plane.SetView(riding);
+
+		// boarding: the player waits in the lobby, hearing the engine start up, until every game
+		// has the round's time of day and the engine on; this one tells the server when it has
+		bool boarding = player && player.IsAlive() && state.boarding && state.inPlane;
+		BR_PlaneSound.s_Boarding = boarding;
+		BR_Client.SetRoundTime(state);
+		BR_Client.Boarding(boarding && BR_Client.TimeIsRound(state) && BR_PlaneSound.Playing());
+		if (boarding && now - m_BR_BoardLogAt >= 2)
+		{
+			m_BR_BoardLogAt = now;
+			int y, mo, d, h, mi;
+			GetGame().GetWorld().GetDate(y, mo, d, h, mi);
+			Print("[BattleDayZ] boarding: this game's clock " + h + ":" + mi + " on day " + d + " (the round's " + state.roundHour + ":00 on day " + state.roundDay + "), engine " + BR_PlaneSound.Describe());
+		}
 
 
 

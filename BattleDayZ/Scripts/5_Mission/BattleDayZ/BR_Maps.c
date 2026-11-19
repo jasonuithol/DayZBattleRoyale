@@ -44,6 +44,8 @@ class BR_Map
 	string m_World;   // the world's name in lower case (GetWorldName); "" for the fallback
 	string m_Title = "this map";
 	ref array<ref BR_LobbySpec> m_Lobbies = new array<ref BR_LobbySpec>();
+	ref array<vector> m_Islands = new array<vector>(); // a point in the middle of each island (y 0)
+	ref array<string> m_IslandNames = new array<string>();
 
 	// the map's lobbies, in the order they take turns
 	void Lobbies()
@@ -53,6 +55,18 @@ class BR_Map
 	void AddLobby(BR_LobbySpec spec)
 	{
 		m_Lobbies.Insert(spec);
+	}
+
+	// the map's islands: each gets boat spots round its shore (BR_Round.IslandBoatSpots), as
+	// the map's own boat spots (cfgeventspawns) are all on the mainland
+	void Islands()
+	{
+	}
+
+	void AddIsland(string name, float x, float z)
+	{
+		m_IslandNames.Insert(name);
+		m_Islands.Insert(Vector(x, 0, z));
 	}
 
 	BR_LobbySpec Lobby(string name)
@@ -85,6 +99,12 @@ class BR_MapChernarus: BR_Map
 		AddLobby(new BR_LobbySpec("cherno_square", "Chernogorsk square", 6576, 2448, 45));
 		AddLobby(new BR_LobbySpec("prison", "Prison Island", 2783, 1240, 60));
 	}
+
+	override void Islands()
+	{
+		AddIsland("Prison Island", 2700, 1300);
+		AddIsland("Skalisty Island", 13600, 3050);
+	}
 }
 
 class BR_Maps
@@ -100,6 +120,7 @@ class BR_Maps
 	void Add(BR_Map profile)
 	{
 		profile.Lobbies();
+		profile.Islands();
 		s_Maps.Insert(profile);
 	}
 

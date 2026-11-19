@@ -20,6 +20,7 @@ class BR_State
 {
 	static const int RPC = 1112670209;      // "BR" + 1: server -> client, this state
 	static const int RPC_JUMP = 1112670210; // client -> server: let me out of the plane
+	static const int RPC_BOARDED = 1112670212; // client -> server: boarding, and this game is ready for take-off
 
 	int phase;
 	bool inRound;      // this player is alive in the current round
@@ -52,6 +53,13 @@ class BR_State
 	vector lobbySlot0; // the places a lobby goes: lobbySlots of them, lobbyApart m apart
 	int lobbySlots;    // along x from lobbySlot0; anything left at one but lobbyAt is an old one
 	float lobbyApart;
+	bool boarding;     // everyone's on the plane, held at the start of its route until every game
+	int roundHour;     // shows the round's time of day (this hour, this day of the month) and
+	int roundDay;      // plays the engine sound
+	vector finalPos;   // testing (testShowFinal): where the last circle closes, marked on the map (zero: not shown)
+	ref array<vector> vehicles = new array<vector>(); // testing (testShowVehicles): every car and boat,
+	ref array<bool> vehicleIsBoat = new array<bool>(); // marked on the map
+	int timeSet;       // goes up every time the server sets the round's time: each game then sets its own
 
 	void Write(ParamsWriteContext ctx)
 	{
@@ -86,6 +94,17 @@ class BR_State
 		ctx.Write(lobbySlot0);
 		ctx.Write(lobbySlots);
 		ctx.Write(lobbyApart);
+		ctx.Write(boarding);
+		ctx.Write(roundHour);
+		ctx.Write(roundDay);
+		ctx.Write(timeSet);
+		ctx.Write(finalPos);
+		ctx.Write(vehicles.Count());
+		for (int v = 0; v < vehicles.Count(); v++)
+		{
+			ctx.Write(vehicles[v]);
+			ctx.Write(vehicleIsBoat[v]);
+		}
 	}
 
 	bool Read(ParamsReadContext ctx)
@@ -104,7 +123,26 @@ class BR_State
 			return false;
 		if (!ctx.Read(lobbyX) || !ctx.Read(lobbyZ) || !ctx.Read(lobbyRadius) || !ctx.Read(lobbyFloorY))
 			return false;
-		return ctx.Read(lobbySlot0) && ctx.Read(lobbySlots) && ctx.Read(lobbyApart);
+		if (!ctx.Read(lobbySlot0) || !ctx.Read(lobbySlots) || !ctx.Read(lobbyApart))
+			return false;
+		return ctx.Read(boarding) && ctx.Read(roundHour) && ctx.Read(roundDay) && ctx.Read(timeSet) && ctx.Read(finalPos) && ReadVehicles(ctx);
+	}
+
+	bool ReadVehicles(ParamsReadContext ctx)
+	{
+		int count;
+		if (!ctx.Read(count))
+			return false;
+		for (int v = 0; v < count; v++)
+		{
+			vector at;
+			bool boat;
+			if (!ctx.Read(at) || !ctx.Read(boat))
+				return false;
+			vehicles.Insert(at);
+			vehicleIsBoat.Insert(boat);
+		}
+		return true;
 	}
 
 	// horizontal distance from pos to the circle's edge; positive means outside
@@ -190,6 +228,54 @@ class BR_Client
 		ScriptRPC rpc = new ScriptRPC();
 		rpc.Write(seenPlane);
 		rpc.Send(null, BR_State.RPC_JUMP, true, null);
+	}
+
+	// boarding: this game shows the round's time of day and plays the plane's engine (sent once
+	// a second while it does, until the plane takes off)
+	static float s_BoardedSentAt;
+	static bool s_BoardedLogged;
+	static void Boarding(bool ready)
+	{
+		if (!ready)
+		{
+			s_BoardedLogged = false;
+			return;
+		}
+		float now = GetGame().GetTickTime();
+		if (now - s_BoardedSentAt < 1)
+			return;
+		s_BoardedSentAt = now;
+		if (!s_BoardedLogged)
+			Print("[BattleDayZ] boarding: this game shows the round's time and plays the engine: ready for take-off");
+		s_BoardedLogged = true;
+		ScriptRPC rpc = new ScriptRPC();
+		rpc.Send(null, BR_State.RPC_BOARDED, true, null);
+	}
+
+	// every time the server sets the round's time (the lobby opening for it, the round starting):
+	// this game's clock straight onto it, rather than waiting up to half a minute for the
+	// server's clock to reach it (the server's agrees when it does). Once per setting: the clock
+	// runs on from there.
+	static int s_TimeSetSeen;
+	static void SetRoundTime(BR_State state)
+	{
+		if (state.timeSet == s_TimeSetSeen)
+			return;
+		s_TimeSetSeen = state.timeSet;
+		if (TimeIsRound(state))
+			return;
+		int year, month, day, hour, minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+		GetGame().GetWorld().SetDate(year, month, state.roundDay, state.roundHour, 0);
+		Print("[BattleDayZ] this game's clock set to the round's " + state.roundHour + ":00 on day " + state.roundDay + " (it was " + hour + ":" + minute + " on day " + day + ")");
+	}
+
+	// this game's clock on the round's hour and day (the day sets the moon)
+	static bool TimeIsRound(BR_State state)
+	{
+		int year, month, day, hour, minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+		return hour == state.roundHour && day == state.roundDay;
 	}
 }
 
@@ -323,6 +409,7 @@ class BR_LobbyGhosts
 class BR_Server
 {
 	static ref ScriptInvoker s_OnJump = new ScriptInvoker(); // (PlayerIdentity sender, vector seenPlane)
+	static ref ScriptInvoker s_OnBoarded = new ScriptInvoker(); // (PlayerIdentity sender)
 }
 
 modded class DayZGame
@@ -351,6 +438,12 @@ modded class DayZGame
 			vector steer;
 			if (IsServer() && sender && ctx.Read(steer))
 				BR_Steer.s_Server.Set(sender.GetId(), steer);
+			return;
+		}
+		if (rpc_type == BR_State.RPC_BOARDED)
+		{
+			if (IsServer() && sender)
+				BR_Server.s_OnBoarded.Invoke(sender);
 			return;
 		}
 		if (rpc_type == BR_State.RPC_JUMP)

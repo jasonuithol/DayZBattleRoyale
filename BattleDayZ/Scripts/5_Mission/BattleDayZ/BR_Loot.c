@@ -21,6 +21,7 @@ class BR_Loot
 {
 	static const int AMMO_BOXES = 3;
 	static const float VEHICLE_LIFETIME = 86400; // s: a day, longer than any round
+	static const float LOOT_LIFETIME = 172800;   // s: two days, longer than the lobby can wait between daily restarts
 	static const ref array<string> BELT_HOLSTERS = {"PlateCarrierHolster", "ChestHolster"};
 	static const float SUPPLY_PLANE_SPEED = 200; // m/s, about a minute from the map edge
 	static const float CRATE_LIFETIME = 3600;    // s; at 0 (Expansion's default) the economy deletes a landed crate once nobody is near it. Rounds clear crates anyway
@@ -111,6 +112,10 @@ class BR_Loot
 			return null;
 		}
 		item.SetOrientation(Vector(Math.RandomFloat(0, 360), 0, 0));
+		// the economy's own lifetime (types.xml: a few hours for most things) would delete it
+		// while the lobby waits for players: the next round's loot goes out as the last one
+		// ends, and the lobby clock holds while nobody's waiting. The round deletes its loot itself.
+		item.SetLifetime(LOOT_LIFETIME);
 		spawned.Insert(item);
 		return item;
 	}
@@ -142,7 +147,10 @@ class BR_Loot
 	static void WithBattery(EntityAI item)
 	{
 		if (item && item.GetInventory().GetAttachmentSlotsCount() > 0)
+		{
 			item.GetInventory().CreateAttachment("Battery9V");
+			item.SetLifetime(LOOT_LIFETIME); // fitting the battery puts the economy's lifetime back
+		}
 	}
 
 	// 1, 2 or 3 at 60 / 30 / 10 percent

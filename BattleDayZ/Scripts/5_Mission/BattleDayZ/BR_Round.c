@@ -1,11 +1,11 @@
 // The round, server side. One tick a second:
 //
 //   LOBBY  every player not in the round waits at the lobby (can't be hurt, pulled back if
-//          they wander off) while a clock counts down. Meanwhile the next round's circle is
-//          picked and its loot and cars put out, a few buildings at a time. At zero, with
+//          they wander off) while a clock counts down. Meanwhile the next round's circles are
+//          picked and its loot and cars put out all over the map, a few buildings at a time. At zero, with
 //          enough players, the round starts: everyone in the lobby is stripped, given the
 //          same plain kit, and put on the plane.
-//   GAME   the plane crosses the first circle on a straight route (drawn on the map); F
+//   GAME   the plane crosses the map on a straight route (drawn on the map); F
 //          jumps, and anyone still on board is dropped at the end of the route. They come
 //          down on a parachute (BR_Chute.c). Meanwhile the circle sits still, then shrinks
 //          onto the next one, phase by phase (both drawn on the map). Outside it the screen
@@ -57,6 +57,7 @@ class BR_Round
 	protected int m_Started;      // players at the start of the round
 	protected string m_Winner;
 	protected ref array<Object> m_Spawned = new array<Object>();
+	protected ref array<Object> m_Vehicles = new array<Object>(); // the round's cars and boats (testShowVehicles)
 
 	// the circle
 	protected vector m_Center;
@@ -83,6 +84,13 @@ class BR_Round
 
 	// the plane, while it's crossing the map, and who's still on it
 	protected ref BR_Flight m_Flight;
+	protected bool m_Boarding;          // the plane waits at the start of its route for every game
+	protected float m_BoardingSince;
+	protected ref array<string> m_Boarded = new array<string>(); // ids whose game is ready
+	protected int m_RoundHour;          // the time the round is set to (the clients check theirs)
+	protected int m_RoundDay;
+	protected int m_TimeSet;            // counts the times the clock was set: each game sets its own then
+	static const float BOARDING_MAX_SECONDS = 60; // a game that never says it's ready doesn't hold everyone
 	protected ref map<string, PlayerBase> m_InPlane = new map<string, PlayerBase>();
 
 	// the next round's loot, put out during the lobby
@@ -159,6 +167,9 @@ class BR_Round
 		m_Lobby = FlatGround(m_Settings.lobbyX, m_Settings.lobbyZ);
 		if (m_Settings.kitExtras)
 			BR_Loot.s_KitExtras = m_Settings.kitExtras;
+#ifdef EXPANSIONMOD
+		ExpansionLampLightBase.s_BR_LitShare = m_Settings.lampsLit;
+#endif
 		m_Map = BR_Maps.Current();
 		if (m_Settings.lobbies.Count() > 0)
 			m_LobbyNames.InsertAll(m_Settings.lobbies);
@@ -167,6 +178,7 @@ class BR_Round
 			foreach (BR_LobbySpec spec : m_Map.m_Lobbies)
 				m_LobbyNames.Insert(spec.name);
 		}
+		IslandBoatSpots();
 		Print("[BattleDayZ] map: " + m_Map.m_Title + " (" + GetGame().GetWorldName() + ", " + BR_Maps.Count() + " map profiles), lobbies: " + m_LobbyNames.Count());
 		if (m_Settings.lobbyHeight > 0 && m_LobbyNames.Count() > 0)
 		{
@@ -175,6 +187,7 @@ class BR_Round
 		}
 		m_PhaseEnds = Now() + m_Settings.firstLobbySeconds;
 		BR_Server.s_OnJump.Insert(OnJump);
+		BR_Server.s_OnBoarded.Insert(OnBoarded);
 		// cars made in the first seconds after a server start come out with no fuel; and the
 		// headless test (-missiontest) puts out its own loot instead
 		string test;
@@ -192,9 +205,51 @@ class BR_Round
 
 	// --- the tick --------------------------------------------------------------------
 
+	// Boat spots round each of the map's islands, ISLAND_BOAT_SPOTS of them, evenly round it: out
+	// from the island's middle until the water is ISLAND_BOAT_DEPTH m deep, facing out to sea.
+	// They join the map's own boat spots, every spot as likely as any other.
+	static const int ISLAND_BOAT_SPOTS = 4;
+	static const float ISLAND_BOAT_DEPTH = 1.5;
+	static const float ISLAND_REACH = 2000; // m out from the middle at most
+	void IslandBoatSpots()
+	{
+		if (!m_Spots || !m_Spots.boats)
+			return;
+		for (int i = 0; i < m_Map.m_Islands.Count(); i++)
+		{
+			vector middle = m_Map.m_Islands[i];
+			int added = 0;
+			for (int k = 0; k < ISLAND_BOAT_SPOTS; k++)
+			{
+				float a = Math.PI2 * k / ISLAND_BOAT_SPOTS + Math.PI / 4;
+				vector dir = Vector(Math.Cos(a), 0, Math.Sin(a));
+				for (float d = 10; d <= ISLAND_REACH; d += 10)
+				{
+					vector p = middle + dir * d;
+					p[1] = GetGame().SurfaceY(p[0], p[2]);
+					if (GetGame().GetWaterDepth(p) < ISLAND_BOAT_DEPTH)
+						continue;
+					BR_CarSpot spot = new BR_CarSpot();
+					spot.x = p[0];
+					spot.z = p[2];
+					spot.h = Math.Atan2(dir[0], dir[2]) * Math.RAD2DEG;
+					spot.types = "VehicleBoat";
+					m_Spots.boats.Insert(spot);
+					added++;
+					break;
+				}
+			}
+			Print("[BattleDayZ] boat spots round " + m_Map.m_IslandNames[i] + ": " + added + " (middle " + middle + ", " + GetGame().SurfaceY(middle[0], middle[2]) + " m up)");
+		}
+	}
+
 	void Tick()
 	{
 		float now = Now();
+		// the lobby shows the first round's time of day while it waits: set on the first tick, once
+		// the mission has set the date (in the round's Init it hadn't yet)
+		if (m_TimeSet == 0)
+			SetRoundTime(m_Round + 1);
 		StopSandstorm();
 		m_Map.OnTick();
 
@@ -256,6 +311,7 @@ class BR_Round
 		{
 			Cleanup();
 			ChangeLobby();
+			SetRoundTime(m_Round + 1); // the lobby shows the next round's time of day while it waits
 			m_Phase = BR_Phase.LOBBY;
 			m_PhaseEnds = now + m_Settings.lobbySeconds;
 			PrepareRound();
@@ -555,7 +611,8 @@ class BR_Round
 
 	// --- getting the next round ready (during the lobby) -----------------------------
 
-	// pick the first circle and start putting out its loot and cars, a few buildings at a time
+	// pick the circles' final point and the first circle, and start putting out the loot and
+	// cars all over the map, a few buildings at a time
 	void PrepareRound()
 	{
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
@@ -565,7 +622,10 @@ class BR_Round
 		m_Radius = r;
 		Print("[BattleDayZ] the last circle will close at " + m_Final);
 
-		m_LootQueue = BR_Loot.BuildingsInside(m_Spots, m_Center, r);
+		// loot all over the map, in lootBuildings of its buildings picked at random: nothing to do
+		// with the circles
+		float world = GetGame().GetWorld().GetWorldSize();
+		m_LootQueue = BR_Loot.BuildingsInside(m_Spots, Vector(world / 2, 0, world / 2), world);
 		m_LootNext = 0;
 		m_LootBuildings = 0;
 		m_Prepared = false;
@@ -588,10 +648,16 @@ class BR_Round
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
 		int items = m_Spawned.Count();
-		// the vehicles go all over the map, the corners and edges outside the first circle too
+		// the vehicles go all over the map too
 		float world = GetGame().GetWorld().GetWorldSize();
 		int cars = BR_Loot.Cars(m_Spots, Vector(world / 2, 0, world / 2), world, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned, m_Settings.carSquare, m_Lobby);
 		int boats = BR_Loot.Boats(m_Spots, m_Settings.boats, m_Settings.carFuel, m_Settings.boatTypes, m_Spawned);
+		m_Vehicles.Clear();
+		for (int v = items; v < m_Spawned.Count(); v++)
+		{
+			if (Transport.Cast(m_Spawned[v]))
+				m_Vehicles.Insert(m_Spawned[v]);
+		}
 		m_Prepared = true;
 		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
 		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, " + boats + " boats, put out over " + seconds + " s");
@@ -606,16 +672,21 @@ class BR_Round
 		return hours[(round - 1) % hours.Count()];
 	}
 
-	// the time of day the round starts at, taking turns (roundHours: morning, noon, night)
+	// the time of day the round starts at, taking turns (roundHours: morning, noon, night): set
+	// as the lobby opens for it (the lobby shows it while it waits) and again at the start (the
+	// clock runs on meanwhile)
 	void SetRoundTime(int round)
 	{
 		int startHour = RoundHour(round);
 		int year, month, day, hour, minute;
 		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
 		GetGame().GetWorld().SetDate(year, month, day, startHour, 0);
+		m_RoundHour = startHour;
+		m_RoundDay = day;
+		m_TimeSet++;
 		if (!GetGame().GetWorld().IsNight())
 		{
-			Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00");
+			Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00 (day " + day + " of month " + month + ")");
 			return;
 		}
 
@@ -634,6 +705,7 @@ class BR_Round
 			}
 		}
 		GetGame().GetWorld().SetDate(year, month, fullDay, startHour, 0);
+		m_RoundDay = fullDay;
 		ClearSky();
 		Print("[BattleDayZ] round " + round + " starts at " + startHour + ":00, a night: day " + fullDay + " of the month, moon " + brightest + ", clear sky");
 	}
@@ -660,9 +732,13 @@ class BR_Round
 
 		if (!m_Settings.testStorm)
 		{
+			// everyone boards; it takes off once every game is ready (UpdateBoarding)
 			m_Flight = BR_Flight.Plan(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
-			m_Flight.TakeOff(Now());
-			BR_Plane.Set(m_Flight.PositionAt(Now()), m_Flight.Velocity());
+			m_Flight.started = Now();
+			m_Boarding = true;
+			m_BoardingSince = Now();
+			m_Boarded.Clear();
+			BR_Plane.Set(m_Flight.PositionAt(Now()), vector.Zero);
 		}
 
 		// everyone in the lobby onto the plane
@@ -706,9 +782,64 @@ class BR_Round
 		}
 		AddBots();
 		UpdateMarkers();
+		Print("[BattleDayZ] round " + m_Round + ": " + m_Started + " players boarding, waiting for their games to show " + m_RoundHour + ":00 on day " + m_RoundDay + " and play the engine");
+	}
 
-		Print("[BattleDayZ] round " + m_Round + " started: " + m_Started + " players, circle " + m_Center + " r " + m_Radius + ", plane " + m_Flight.from + " -> " + m_Flight.to + " (" + m_Flight.length + " m at " + m_Flight.altitude + " m, " + m_Flight.Duration() + " s)");
+	// Boarding, once a second: the plane held at the start of its route until every player on it
+	// has said their game shows the round's time of day and plays the engine (or
+	// BOARDING_MAX_SECONDS have gone by); then it takes off, and the round's clock starts.
+	void UpdateBoarding(float now)
+	{
+		m_Flight.started = now;
+		BR_Plane.Set(m_Flight.PositionAt(now), vector.Zero);
+		int waiting = BoardingWaiting();
+		bool timedOut = now - m_BoardingSince >= BOARDING_MAX_SECONDS;
+		if (waiting > 0 && !timedOut)
+			return;
+
+		m_Boarding = false;
+		m_Flight.TakeOff(now);
+		BR_Plane.Set(m_Flight.PositionAt(now), m_Flight.Velocity());
+		m_StageEnds = now + m_Settings.CircleSeconds(0);
+		m_NextDrop = m_StageEnds + m_Settings.supplyDropSeconds / 2;
+		string how = "every game ready";
+		if (waiting > 0)
+			how = waiting.ToString() + " games not ready after " + BOARDING_MAX_SECONDS + " s: " + BoardingNames();
+		Print("[BattleDayZ] round " + m_Round + " started: " + m_Started + " players, boarded in " + (now - m_BoardingSince) + " s (" + how + "), circle " + m_Center + " r " + m_Radius + ", plane " + m_Flight.from + " -> " + m_Flight.to + " (" + m_Flight.length + " m at " + m_Flight.altitude + " m, " + m_Flight.Duration() + " s)");
 		Announce("Round " + m_Round + ": the plane is taking off", "Its route is on the map (M). Press F to jump.");
+	}
+
+	// players on the plane (still connected) whose game hasn't said it's ready
+	int BoardingWaiting()
+	{
+		int waiting = 0;
+		for (int i = 0; i < m_InPlane.Count(); i++)
+		{
+			PlayerBase p = m_InPlane.GetElement(i);
+			if (p && p.IsAlive() && p.GetIdentity() && m_Boarded.Find(m_InPlane.GetKey(i)) < 0)
+				waiting++;
+		}
+		return waiting;
+	}
+
+	string BoardingNames()
+	{
+		string names = "";
+		for (int i = 0; i < m_InPlane.Count(); i++)
+		{
+			PlayerBase p = m_InPlane.GetElement(i);
+			if (p && p.IsAlive() && p.GetIdentity() && m_Boarded.Find(m_InPlane.GetKey(i)) < 0)
+				names += " " + p.GetIdentity().GetName();
+		}
+		return names;
+	}
+
+	void OnBoarded(PlayerIdentity sender)
+	{
+		if (!m_Boarding || !sender || !m_InPlane.Contains(sender.GetId()) || m_Boarded.Find(sender.GetId()) >= 0)
+			return;
+		m_Boarded.Insert(sender.GetId());
+		Print("[BattleDayZ] " + sender.GetName() + "'s game is ready: " + m_RoundHour + ":00 on day " + m_RoundDay + ", engine sound on (" + m_Boarded.Count() + " ready)");
 	}
 
 	// testStorm: straight to the first red circle closing, with everyone on the ground
@@ -799,6 +930,8 @@ class BR_Round
 		PlayerBase player;
 		if (m_Flight && m_InPlane.Find(sender.GetId(), player) && player && player.IsAlive())
 		{
+			if (m_Boarding)
+				return; // not until it takes off
 			Jump(player, seenPlane);
 			return;
 		}
@@ -859,6 +992,12 @@ class BR_Round
 			return;
 		}
 
+		if (m_Boarding)
+		{
+			UpdateBoarding(now);
+			if (m_Boarding)
+				return; // the round's clock starts at take-off
+		}
 		UpdateFlight(now);
 		UpdateZone(now);
 
@@ -868,7 +1007,7 @@ class BR_Round
 		{
 			m_NextStormHit = now + STORM_HIT_SECONDS;
 			float perHit = m_Settings.CircleDamage(m_Circle) * STORM_HIT_SECONDS;
-			for (int a = 0; a < m_Alive.Count(); a++)
+			for (int a = 0; a < m_Alive.Count() && perHit > 0; a++) // circleDamage 0: no cuts at all
 			{
 				PlayerBase p = m_Alive.GetElement(a);
 				if (InPlane(p) || m_WholeMap || p.BR_IsChuting())
@@ -924,8 +1063,15 @@ class BR_Round
 					return;
 				}
 			}
-			// ...and the next white circle is revealed
-			PickNext(m_Settings.CircleFraction(m_Circle));
+			// ...and the next white circle is revealed: the first is the first circle itself
+			// (firstCircle of the map's width across), each after it circleFractions of the one before
+			if (m_Circle == 0)
+			{
+				m_NextCenter = m_Center;
+				m_NextRadius = m_Radius;
+			}
+			else
+				PickNext(m_Settings.CircleFraction(m_Circle - 1));
 			if (m_NextRadius < m_Settings.circleMinRadius)
 			{
 				m_NextRadius = 0;
@@ -1117,6 +1263,7 @@ class BR_Round
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
 		m_Prepared = false;
 		m_Flight = null;
+		m_Boarding = false;
 		m_InPlane.Clear();
 		int count = 0;
 		for (int i = 0; i < m_Spawned.Count(); i++)
@@ -1128,6 +1275,7 @@ class BR_Round
 			}
 		}
 		m_Spawned.Clear();
+		m_Vehicles.Clear();
 		int drops = BR_Loot.ClearSupplyDrops();
 		BR_Leftovers.s_On = false;
 		int leftovers = BR_Leftovers.Clear();
@@ -1171,6 +1319,11 @@ class BR_Round
 			if (waiting < m_Settings.minPlayers)
 				subtitle = subtitle + " (" + m_Settings.minPlayers + " needed)";
 		}
+		else if (m_Phase == BR_Phase.GAME && m_Boarding)
+		{
+			title = "Boarding the plane";
+			subtitle = m_Alive.Count().ToString() + " alive";
+		}
 		else if (m_Phase == BR_Phase.GAME)
 		{
 			if (m_Storm)
@@ -1213,6 +1366,28 @@ class BR_Round
 			state.planePos = m_Flight.FlyingAt(now);
 			state.planeVel = m_Flight.Velocity();
 			planeLine = "Press F to jump. Everyone left is dropped at the end of the route in " + Clock(m_Flight.started + m_Flight.Duration() - now);
+			if (m_Boarding)
+			{
+				state.planeVel = vector.Zero;
+				int ready = m_Started - BoardingWaiting();
+				planeLine = "Taking off when everyone's game is ready: " + ready + " of " + m_Started;
+			}
+		}
+		state.boarding = m_Phase == BR_Phase.GAME && m_Boarding;
+		state.roundHour = m_RoundHour;
+		state.roundDay = m_RoundDay;
+		state.timeSet = m_TimeSet;
+		if (m_Settings.testShowFinal && m_Phase == BR_Phase.GAME)
+			state.finalPos = m_Final;
+		if (m_Settings.testShowVehicles)
+		{
+			foreach (Object vehicle : m_Vehicles)
+			{
+				if (!vehicle)
+					continue;
+				state.vehicles.Insert(vehicle.GetPosition());
+				state.vehicleIsBoat.Insert(BoatScript.Cast(vehicle) != null);
+			}
 		}
 		state.title = title;
 		if (m_Sky)
@@ -1384,6 +1559,23 @@ class BR_Round
 			}
 		}
 		Print("[BRTest] loot in " + buildings + " buildings (" + items + " things), " + cars + " cars near " + m_Center);
+		float shortestLife = 1000000;
+		int shortLived = 0;
+		string shortTypes = "";
+		foreach (Object put : m_Spawned)
+		{
+			ItemBase loot = ItemBase.Cast(put);
+			if (!loot || loot.GetHierarchyParent())
+				continue;
+			shortestLife = Math.Min(shortestLife, loot.GetLifetime());
+			if (loot.GetLifetime() < BR_Loot.LOOT_LIFETIME)
+			{
+				shortLived++;
+				if (shortLived <= 8)
+					shortTypes += " " + loot.GetType() + ":" + loot.GetLifetime();
+			}
+		}
+		Print("[BRTest] loot lifetime: " + shortLived + " items lying out with less than " + BR_Loot.LOOT_LIFETIME + " s (0 expected), the shortest " + shortestLife + " s:" + shortTypes);
 
 		// what the piles came out as, roughly: guns with a magazine in them
 		int guns = 0;

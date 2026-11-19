@@ -18,9 +18,9 @@ class BR_Settings
 	int lobbyChangeSeconds = 0;    // also change it this often while players wait (0: only between rounds)
 	ref array<int> roundHours;     // the time each round starts at, taking turns: hours (0-23), in
 	                               // order, round after round (default morning, noon, night: 7, 12, 23)
-	float firstCircle = 0.5;       // the first circle's width, as a share of the map's (it's placed to
+	float firstCircle = 1.0;       // the first circle's width, as a share of the map's (it's placed to
 	                               // hold the point the last circle closes on, picked anywhere on the map)
-	int lootBuildings = 6000;      // buildings inside the first circle that get loot (bigger ones get up to 4 piles)
+	int lootBuildings = 6000;      // buildings that get loot, picked at random all over the map (bigger ones get up to 4 piles)
 	int cars = 100;                // vehicles, spread evenly over the whole map (none near the lobby):
 	float carSquare = 1365;        // it's tiled with squares about this size (m), lined up with its
 	                               // edges, that each have the same chance of one: at a vanilla car
@@ -28,11 +28,12 @@ class BR_Settings
 	ref array<string> vehicles;    // what spawns at the car spots, one entry per vehicle, equally likely:
 	                               // its colours as "A|B|C", one picked at random
 	float carFuel = 0.15;          // fraction of a full tank (boats too)
+	float lampsLit = 1.0;          // the share of street lamps lit at night (Expansion's; 0: its own LampAmount_OneInX)
 	ref array<string> kitExtras;   // more things everyone gets in the lobby's kit (testing, events): class names
 	int boats = 0;                 // boats each round, at the map's vanilla boat spots (if it has any)
 	string boatTypes = "Boat_01_Orange|Boat_01_Blue|Boat_01_Black|Boat_01_Camo"; // one picked at random
 	int supplyDropSeconds = 240;   // a supply drop this often, inside the next circle (0: none)
-	float planeSpeed = 120;        // m/s: the plane crosses the first circle (about 15 km) in about 2 minutes
+	float planeSpeed = 120;        // m/s: the plane crosses the map (about 15 km) in about 2 minutes
 	float planeHeight = 400;       // m above the highest ground under its route
 	// The circle repeats three steps, circle after circle:
 	//   cooldown      nobody knows where the next circle is (at the start of a round no circle
@@ -50,6 +51,8 @@ class BR_Settings
 	float circleMinRadius = 25;
 	bool testStorm = false;        // testing only: no plane; everyone starts on the ground just outside
 	                               // the first white circle, with the red already closing on them
+	bool testShowFinal = false;    // testing only: the point the last circle closes on is marked on the map
+	bool testShowVehicles = false; // testing only: every car and boat of the round is marked on the map
 	float testWhiteRadius = 0;     // testing only, with testStorm: that first white circle's radius (0: the usual)
 	int testBots = 0;              // testing only: this many AI survivors join each round, inside the
 	                               // first white circle, and play it out as players (they just stand there)

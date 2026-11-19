@@ -21,15 +21,18 @@ what comes later.
    waiting has pressed F to say they're ready, the round starts as soon as its loot is out. New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
-   diseases, food and water). Meanwhile the next round is got ready: the first circle, half the map's width across (`firstCircle`), with loot in up to 6,000
-   buildings inside it (1 to 4 piles each, by size, about 25,000
-   items) and 100 vehicles spread evenly over the whole map, each equally likely one of: a
+   diseases, food and water). Meanwhile the next round is got ready: its circles are picked (the first is as wide as the
+   map, `firstCircle`), and loot is put out in up to 6,000 buildings picked at random
+   all over the map, nothing to do with the circles (`lootBuildings`; 1 to 4 piles each, by
+   size, about 25,000 items), and 100 vehicles spread evenly over the whole map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
-   which has 15% (`carFuel`). Maps with water get boats too (`boats`: 12 on Chernarus, 5 on
-   Livonia), afloat at random vanilla boat spots, with a spark plug in and the same fuel. The map is tiled with 12 x 12 squares of about 1.4 km
+   which has 15% (`carFuel`). Maps with water get boats too (`boats`: 30 on Chernarus, 5 on
+   Livonia), afloat at random boat spots, with a spark plug in and the same fuel: the map's
+   vanilla ones, all on the mainland, and 4 round the shore of each of its islands (Prison
+   Island and Skalisty Island on Chernarus), every spot as likely as any other. The map is tiled with 12 x 12 squares of about 1.4 km
    (`carSquare`), and the vehicles are dealt round its 16 quarters (4 x 4 km) in turn, so each
-   gets 6 or 7, corners and edges outside the first circle included (none within 1 km of the
+   gets 6 or 7, corners and edges included (none within 1 km of the
    lobby), with nothing guaranteed at any one place. In its square a vehicle is
    left the way one might have been: half the time at a vanilla car spot (by a road, in a town)
    if the square has a free one, otherwise parked by whatever structure is about (a house, a
@@ -46,7 +49,14 @@ what comes later.
    and a bandage), and put on the plane. The time
    is set to the round's: morning, noon and night take turns, round after round (7:00, 12:00
    and 23:00, `roundHours`). A night round is a bright one: the date moves to the night of
-   the month with the fullest moon, and the sky is cleared (no clouds, rain or fog) for an hour. Expansion's plane crosses the whole map on a straight route between two
+   the month with the fullest moon, and the sky is cleared (no clouds, rain or fog) for an hour; every street lamp is lit
+   (`lampsLit`, the share lit at night). The lobby shows the next round's time of day from
+   the moment the last round ends.
+   - **Boarding:** everyone waits in the lobby, hearing the engine start up, until every
+     player's game shows the round's time of day and plays the engine (at most 60 s); then the
+     plane takes off and the round's clock starts.
+
+   Expansion's plane crosses the whole map on a straight route between two
    random points on opposite sides of it (nothing to do with the circles), 400 m above the highest ground under it. That takes 2 to 3
    minutes (`planeSpeed`, `planeHeight`).
    - **The view:** players watch from behind the plane and can orbit it with the mouse. The
@@ -73,8 +83,9 @@ what comes later.
      just round the whole map.
 
    Cooldown and notification are each 5 minutes for the first circle, then 4, 3, 2, 1 and then
-   30 seconds for every circle after (`circleSeconds`). Each white circle is 70%, 65%, 60%,
-   55%, 50%, 40%, then 50% of the one before, starting at 70% of the first circle. One smaller than 25 m becomes
+   30 seconds for every circle after (`circleSeconds`). The first white circle is the first
+   circle itself, as wide as the map (`firstCircle`); each after it is 70%,
+   65%, 60%, 55%, 50%, 40%, then 50% of the one before (`circleFractions`). One smaller than 25 m becomes
    nothing: once the red has closed to nothing, about 35 minutes into the round, the storm is
    everywhere and the last one alive wins.
    - **Where the circles go:** the point the last circle closes on is picked at the start of
@@ -112,7 +123,7 @@ what comes later.
 
 ## Testing settings
 
-Three settings in `battleroyale.json`, all off by default, shorten a test:
+Five settings in `battleroyale.json`, all off by default, shorten or show a test:
 
 - `testStorm`: no plane. Everyone starts on the ground 150 m outside the first white circle,
   with the red 400 m out and closing on it over at most 60 s. Damage is on straight away.
@@ -121,6 +132,12 @@ Three settings in `battleroyale.json`, all off by default, shorten a test:
 - `testBots`: this many AI survivors join every round, kitted like everyone else, in the
   middle of the first white circle. They count as players, so a round with a bot is won or
   lost like a real one. They stand still and don't bandage.
+- `testShowFinal`: the point the last circle closes on is marked on the map (a magenta cross).
+- `testShowVehicles`: every car (an orange square) and boat (a cyan diamond) of the round is
+  marked on the map, where it is now.
+
+A `circleDamage` of `[0]` turns the storm's damage off, and `circleSeconds` of `[10]` makes
+every circle 10 s, for a look at where the circles go.
 
 ## Loot
 

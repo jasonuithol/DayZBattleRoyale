@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.6 - 2026-11-19
+
+- **Every street lamp lit at night** (`lampsLit` 1, the share lit): Expansion's own setting
+  lights one in three at most, and is shared with every mission on the server.
+- **Boats on Chernarus: 30** (was 12), and the islands get boat spots of their own: 4 round
+  the shore of Prison Island and of Skalisty Island, among the map's 72 on the mainland.
+- **Boarding:** players wait in the lobby, hearing the engine start up, until every game
+  shows the round's time of day and plays the engine (60 s at most); then the plane takes off.
+  The lobby shows the next round's time of day from the moment the last round ends.
+- **Testing:** `testShowFinal` marks the point the last circle closes on, on the map, and
+  `testShowVehicles` every car and boat; a `circleDamage` of 0 means no storm cuts at all.
+- **The first circle is as wide as the map** (`firstCircle` 1, was 0.5),
+  so there's time to reach it from the far side of the map. It's also the first white circle
+  shown: before, the first one shown was 70% of it.
+- **Loot all over the map:** up to 6,000 buildings (`lootBuildings`) picked at random
+  anywhere on the map, nothing to do with the circles. Before, only buildings inside the first
+  circle got loot, and that circle isn't shown at the start: with the plane's route no longer
+  tied to it, a player could land far from any loot without knowing.
+- **Loot stays put until the round:** the next round's loot goes out as the last one ends,
+  and the game's own clean-up deleted most of it after a few hours (4 h for most things)
+  while the lobby waited for players. The round's loot now lasts two days; the round removes
+  it itself.
+
 ## 0.5.5 - 2026-11-18
 
 - **Bright nights:** a night round is under a full moon in a clear sky. The date moves to the
