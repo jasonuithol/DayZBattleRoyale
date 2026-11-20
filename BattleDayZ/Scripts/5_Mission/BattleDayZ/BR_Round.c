@@ -366,7 +366,7 @@ class BR_Round
 			return;
 		BR_Loot.Kit(player);
 		m_LobbyReset.Set(id, player);
-		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " reset in the lobby");
+		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " reset in the lobby (" + BR_Loot.Carried(player) + " things on them)");
 		// knocked out (or joined) while a round is on: straight to watching it
 		if (m_Phase == BR_Phase.GAME && !m_InPlane.Contains(id))
 			NextWatch(player);
@@ -750,6 +750,7 @@ class BR_Round
 		{
 			PlayerBase player = players[i];
 			BR_Loot.Kit(player);
+			Print("[BattleDayZ] " + player.GetIdentity().GetName() + " kitted for round " + m_Round + " (" + BR_Loot.Carried(player) + " things on them)");
 			string id = player.GetIdentity().GetId();
 			m_Alive.Set(id, player);
 			m_Names.Set(id, player.GetIdentity().GetName());
@@ -903,6 +904,14 @@ class BR_Round
 		if (seenPlane != vector.Zero && vector.Distance(seenPlane, plane) < 300)
 			plane = seenPlane;
 		vector pos = plane + Vector(Math.RandomFloat(-15, 15), -4, Math.RandomFloat(-15, 15));
+		// the kit, checked at the door: a player who has lost it (it's happened, the cause not yet
+		// known) gets it again
+		int carried = BR_Loot.Carried(player);
+		if (carried < 5)
+		{
+			Print("[BattleDayZ] " + player.GetIdentity().GetName() + " had only " + carried + " things on them at the door: kitted again");
+			BR_Loot.Kit(player);
+		}
 		player.BR_StartChute(); // also no damage until just after landing
 		player.SetPosition(pos);
 		Print("[BattleDayZ] " + player.GetIdentity().GetName() + " jumped at " + pos + ", " + BR_ChuteCommand.HeightAboveGround(pos) + " m above the ground");

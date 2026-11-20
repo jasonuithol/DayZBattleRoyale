@@ -823,4 +823,12 @@ class BR_Loot
 	}
 
 	static ref array<string> s_KitExtras = new array<string>();
+
+	// what a player has on and with them: the number of things (for the log)
+	static int Carried(PlayerBase player)
+	{
+		array<EntityAI> items = new array<EntityAI>();
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+		return items.Count() - 1; // not the player
+	}
 }

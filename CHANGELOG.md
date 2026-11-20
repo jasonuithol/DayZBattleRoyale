@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.7 - 2026-11-20
+
+- **Street lamps that were dark at night are lit.** Expansion lights only the lamps the server
+  has when the mission loads, about 1,050 of Chernarus's 2,700 (575 on Livonia); the server
+  makes the rest later, round where players go, and they stayed dark (all of Nagornoye and
+  Novodmitrovsk, say). Each is now lit as it comes.
+- **Lamps with loudspeakers are lit too:** the metal street lamps and the wooden and concrete
+  power pole lamps with a loudspeaker on them (659 on Chernarus) are vanilla classes Expansion
+  doesn't light.
+- **Lamps in the lobby in the sky are lit** at night, like the map's.
+- **No more flickering:** a town's worth of lit lamps is more lights than the game draws at
+  once, and the lit patches flickered on and off. Each player's game lights only the 16 lamps
+  nearest them (the rest light up as they come close), and the lamps cast no shadows.
+- **Nobody jumps without the kit:** a player who reaches the plane's door with less than the
+  kit on them (it happened once, after a respawn; the cause isn't known yet) is given it again
+  there. The server's log says how many things each player has on them at each step.
+
 ## 0.5.6 - 2026-11-19
 
 - **Every street lamp lit at night** (`lampsLit` 1, the share lit): Expansion's own setting

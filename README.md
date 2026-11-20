@@ -50,7 +50,8 @@ what comes later.
    is set to the round's: morning, noon and night take turns, round after round (7:00, 12:00
    and 23:00, `roundHours`). A night round is a bright one: the date moves to the night of
    the month with the fullest moon, and the sky is cleared (no clouds, rain or fog) for an hour; every street lamp is lit
-   (`lampsLit`, the share lit at night). The lobby shows the next round's time of day from
+   (`lampsLit`, the share lit at night), those with loudspeakers and those in the lobby too;
+   each player's game lights the 16 nearest it (more lights than that flicker). The lobby shows the next round's time of day from
    the moment the last round ends.
    - **Boarding:** everyone waits in the lobby, hearing the engine start up, until every
      player's game shows the round's time of day and plays the engine (at most 60 s); then the

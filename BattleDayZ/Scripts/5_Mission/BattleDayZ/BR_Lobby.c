@@ -54,6 +54,7 @@ class BR_SkyLobby
 	int m_Buildings;
 	int m_Models;
 	int m_Failed;
+	int m_Lamps;                           // street lamps in it lit at night
 	float m_WorstMiss;                     // m between where a piece should be and where it is
 	string m_FloorSize;
 	ref BR_LobbySpec m_Spec;               // the place on the map it's a copy of (null: from a file)
@@ -151,6 +152,8 @@ class BR_SkyLobby
 				continue;
 			string shape = o.GetShapeName();
 			string type = o.GetType();
+			if (type == "ExpansionLampLightBase_Lamp")
+				continue; // a street lamp's light: the lobby's lamps get their own (Make)
 			bool building = o.IsInherited(Building) && type.IndexOf("Land_") == 0;
 			if (!building && shape == "")
 				continue;
@@ -262,11 +265,23 @@ class BR_SkyLobby
 				continue;
 			}
 			m_Built.Insert(o);
+#ifdef EXPANSIONMOD
+			// a street lamp, copied as its model: the server lights it as the map's are lit
+			if (!m_Client)
+			{
+				Object light = BR_SpeakerLamp.LightModel(o, piece.p3d);
+				if (light)
+				{
+					m_Built.Insert(light);
+					m_Lamps++;
+				}
+			}
+#endif
 		}
 		string whose = "";
 		if (m_Client)
 			whose = " (this game's own copy)";
-		Print("[BattleDayZ] lobby in the sky" + whose + ": " + m_Title + " at " + m_Origin + ", " + m_Built.Count() + " pieces (" + m_Buildings + " buildings, " + m_Models + " models, " + m_Floor.Count() + " floor slabs), " + m_Failed + " failed, floor " + (m_Lowest - m_Origin[1]) + " to " + (m_Highest - m_Origin[1]) + " m, worst miss " + m_WorstMiss + " m");
+		Print("[BattleDayZ] lobby in the sky" + whose + ": " + m_Title + " at " + m_Origin + ", " + m_Built.Count() + " pieces (" + m_Buildings + " buildings, " + m_Models + " models, " + m_Floor.Count() + " floor slabs, " + m_Lamps + " lamps lit at night), " + m_Failed + " failed, floor " + (m_Lowest - m_Origin[1]) + " to " + (m_Highest - m_Origin[1]) + " m, worst miss " + m_WorstMiss + " m");
 	}
 
 	protected Object Place(BR_LobbyPiece piece)
