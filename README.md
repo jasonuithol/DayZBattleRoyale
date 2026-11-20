@@ -66,10 +66,28 @@ what comes later.
    - **F** jumps. Anyone still on board at the end of the route is dropped there.
 3. **The jump.** Third person all the way down, whatever the player's view setting.
    - **Free fall:** 22.5 m/s down (half a real skydiver's, for more time to pick a spot),
-     lying flat, steering with WASD at 30 m/s, relative to where you look.
-   - **F again** opens the parachute; it opens by itself 100 m above the ground otherwise.
-     Under it you're upright, coming down at 6 m/s and steering at 9 m/s. Everyone sees the
-     canopy above you.
+     lying flat and drifting forward at 8 m/s, the way you look. The keys manoeuvre, and the
+     body shows it (everyone sees it):
+     - **W** tracks: tilted forward with the arms down the sides, 30 m/s forward.
+     - **W and Shift** dive: steeper, 40 m/s forward and 32 m/s down.
+     - **Shift** plummets: head down, 50 m/s straight down.
+     - **S** brakes: tilted back, arms and legs spread, hardly any forward.
+     - **A, D** roll and drift that way.
+   - **F again** opens the parachute; it opens by itself 150 m above the ground otherwise.
+     The body first comes back to neutral (level, no keys), then the canopy opens, you swing
+     upright and your hands go up to grip the lines. Everyone sees the canopy above you.
+   - **Under the canopy:** 6 m/s down, gliding forward at 6 m/s, the jumper swinging under the
+     canopy as it tilts. **W** lets the canopy lead (12 m/s), **S** holds it back (hardly any
+     forward), **Shift** sinks faster (12 m/s), **A, D** bank it and turn that way: hold them
+     and you spiral down.
+   - **The camera:** in free fall it tilts with you, pulls back while you manoeuvre (further
+     in the dive) and shakes in the wind, with wisps streaming past, more the faster you go.
+     Under the canopy it moves 10 m out and up, looking down on you, and turns with you.
+   - **The animations** are the game's own, tilted, bent and blended by a player animation
+     graph of the mod's own (a second pbo in the mod, made from the game's at every build:
+     `tools/make_anims.py`; the arm and finger poses are solved from bones measured in game,
+     `tools/solve_arms.py`). A mod that replaces the player animation graph too (Survivor
+     Animations, say) can't run beside it.
    - **The pack:** a black assault bag sits on your back from the jump until you land.
    - **Landing:** about 1.5 m above whatever is under you (the ground, a roof, a car, a rock;
      not a tree), the game's own fall takes over and lands you. Nobody can be

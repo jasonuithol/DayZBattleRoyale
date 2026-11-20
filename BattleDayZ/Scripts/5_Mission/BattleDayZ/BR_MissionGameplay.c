@@ -49,9 +49,31 @@ modded class MissionGameplay
 		super.OnMissionFinish();
 	}
 
+	// Measuring (BR_ChuteCommand.s_Measure, for tools/solve_arms.py): the fingers of the fists, raised a second in the lobby
+	protected float m_BR_RaisedFor;
+	protected bool m_BR_FistLogged;
+	protected void BR_MeasureFist(float dt)
+	{
+		if (!BR_ChuteCommand.s_Measure || m_BR_FistLogged)
+			return;
+		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+		if (!player || !player.IsRaised() || player.BR_IsChuting())
+		{
+			m_BR_RaisedFor = 0;
+			return;
+		}
+		m_BR_RaisedFor += dt;
+		if (m_BR_RaisedFor >= 1)
+		{
+			m_BR_FistLogged = true;
+			BR_ChuteCommand.LogBones("fist", player, BR_ChuteCommand.s_FingerBones);
+		}
+	}
+
 	override void OnUpdate(float timeslice)
 	{
 		super.OnUpdate(timeslice);
+		BR_MeasureFist(timeslice);
 		BR_ClientLobby.Update();
 		BR_PlaneSound.Update();
 		BR_UpdateHud();

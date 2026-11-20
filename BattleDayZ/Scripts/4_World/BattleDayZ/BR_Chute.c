@@ -6,6 +6,10 @@ modded class PlayerBase
 	protected int m_BR_ChuteId;      // synced: the server bumps it to start a jump
 	protected int m_BR_ChuteDoneId;  // local: the last jump this game has finished
 	protected int m_BR_ChuteOpenId;  // synced: the jump whose chute the player opened (F)
+	protected int m_BR_TiltPitch;    // synced: the jumper's tilt (degrees), for everyone else's game to show
+	protected int m_BR_TiltRoll;
+	protected int m_BR_TiltTurn;     // synced: degrees the canopy's banked turns have turned them
+	static const int BR_TILT_STEP = 3; // degrees: the tilt is sent in steps this big
 	protected float m_BR_LoggedAt;
 	protected Object m_BR_Canopy;    // client: the parachute above this player (local, visual only)
 	protected EntityAI m_BR_Pack;    // server: the parachute pack on the jumper's back, for the jump only
@@ -17,6 +21,9 @@ modded class PlayerBase
 		super.Init();
 		RegisterNetSyncVariableInt("m_BR_ChuteId");
 		RegisterNetSyncVariableInt("m_BR_ChuteOpenId");
+		RegisterNetSyncVariableInt("m_BR_TiltPitch", -90, 90);
+		RegisterNetSyncVariableInt("m_BR_TiltRoll", -90, 90);
+		RegisterNetSyncVariableInt("m_BR_TiltTurn", -180, 180);
 	}
 
 	// server: out of the plane. No damage until shortly after landing: a disagreement between
@@ -71,6 +78,42 @@ modded class PlayerBase
 	bool BR_IsChuting()
 	{
 		return m_BR_ChuteId != m_BR_ChuteDoneId;
+	}
+
+	// The canopy tilts with the jumper's swing, about itself (it's the fulcrum: the jumper's
+	// animation graph swings them about it, BR_ChuteCommand)
+	static const float BR_CANOPY_HEIGHT = 7.65; // m above the feet: the canopy's middle (blender/build_parachute.py)
+	protected void BR_TiltCanopy(BR_ChuteCommand chute)
+	{
+		if (!m_BR_Canopy)
+			return;
+		vector ypr = Vector(0, -chute.TiltPitch(), chute.TiltRoll());
+		vector m[3];
+		Math3D.YawPitchRollMatrix(ypr, m);
+		vector up = Vector(0, BR_CANOPY_HEIGHT, 0);
+		m_BR_Canopy.SetOrientation(ypr);
+		m_BR_Canopy.SetPosition(up - m[1] * BR_CANOPY_HEIGHT);
+	}
+
+	// The jumper's tilt: the server has their keys, so its tilt is the one; it sends it, and
+	// every other game's copy of the jump shows it. The jumper's own game works it out itself.
+	protected void BR_ShareTilt(BR_ChuteCommand chute)
+	{
+		if (GetGame().IsServer())
+		{
+			int pitch = Math.Round(chute.TiltPitch() / BR_TILT_STEP) * BR_TILT_STEP;
+			int roll = Math.Round(chute.TiltRoll() / BR_TILT_STEP) * BR_TILT_STEP;
+			int turn = Math.Round(chute.Turn());
+			if (pitch != m_BR_TiltPitch || roll != m_BR_TiltRoll || turn != m_BR_TiltTurn)
+			{
+				m_BR_TiltPitch = pitch;
+				m_BR_TiltRoll = roll;
+				m_BR_TiltTurn = turn;
+				SetSynchDirty();
+			}
+		}
+		else if (GetGame().GetPlayer() != this)
+			chute.SetTilt(m_BR_TiltPitch, m_BR_TiltRoll, m_BR_TiltTurn);
 	}
 
 	// the plane's camera mode while watching from it; third person for the whole jump
@@ -141,6 +184,8 @@ modded class PlayerBase
 			{
 				chute.SetOpenAsked(BR_ChuteOpened());
 				BR_Canopy(chute.IsOpen());
+				BR_ShareTilt(chute);
+				BR_TiltCanopy(chute);
 				return true; // still coming down
 			}
 			BR_Canopy(false);

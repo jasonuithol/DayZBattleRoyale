@@ -285,7 +285,7 @@ class BR_Client
 class BR_Steer
 {
 	static const int RPC = 1112670211;
-	static vector s_Local;                                         // client: this player's keys
+	static vector s_Local;                                         // client: this player's keys (x right, y shift, z forward)
 	static ref map<string, vector> s_Server = new map<string, vector>(); // server: by player id
 	static vector s_Sent;
 	static float s_SentAt;
@@ -296,7 +296,10 @@ class BR_Steer
 		UAInputAPI api = GetUApi();
 		float forward = api.GetInputByName("UAMoveForward").LocalValue() - api.GetInputByName("UAMoveBack").LocalValue();
 		float right = api.GetInputByName("UAMoveRight").LocalValue() - api.GetInputByName("UAMoveLeft").LocalValue();
-		s_Local = Vector(Math.Clamp(right, -1, 1), 0, Math.Clamp(forward, -1, 1));
+		float fast = 0; // shift (sprint): the middle of the three, up and down having no key
+		if (api.GetInputByName("UATurbo").LocalValue() > 0)
+			fast = 1;
+		s_Local = Vector(Math.Clamp(right, -1, 1), fast, Math.Clamp(forward, -1, 1));
 		float now = GetGame().GetTickTime();
 		if (vector.Distance(s_Local, s_Sent) > 0.05 || now - s_SentAt > 0.5)
 		{

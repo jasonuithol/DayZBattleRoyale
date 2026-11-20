@@ -8,6 +8,9 @@
 #   blender --background --python blender/build_parachute.py # after changing the model
 #   tools/build.sh
 #
+# The staged mod also gets pbos/battledayz_anims: the game's player animation graph with the
+# jump's tilt added (tools/make_anims.py), packed as a pbo of its own.
+#
 # Binarize runs under GE-Proton in its own prefix (shared with img2paa.sh; never the DayZ
 # Tools prefix in compatdata/). It scans its whole drive for addons, so the source gets a
 # drive of its own: P: is a scratch copy of BattleDayZ/, O: the output.
@@ -46,6 +49,8 @@ fi
 rm -rf "$STAGE"
 cp -r "$ROOT/$MOD" "$STAGE"
 find "$STAGE" -name model.cfg -delete   # baked into the binarized models
+# the player's animation graph with the jump's tilt, from this game's own (its own pbo)
+python3 "$ROOT/tools/make_anims.py" "$STAGE/pbos/battledayz_anims" >/dev/null
 while IFS= read -r -d '' src; do
 	rel="${src#"$ROOT/$MOD/"}"
 	out="$WORK/O/$MOD/$rel"

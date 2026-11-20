@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 - 2026-11-20
+
+- **Manoeuvring in free fall:** with no keys you drift forward; **W** tracks (tilted forward,
+  arms down the sides, 30 m/s forward), **W and Shift** dive (40 m/s forward, 32 m/s down),
+  **Shift** plummets head down (50 m/s straight down), **S** brakes (tilted back, arms and legs
+  spread, hardly any forward), **A** and **D** roll and drift. Every game sees the body move.
+- **Opening the canopy:** the body comes back to neutral first, then the canopy opens, the
+  jumper swings upright and their hands go up to grip the lines. It opens by itself at 150 m
+  (was 100 m), to leave room to come out of a plummet.
+- **Flying the canopy:** it glides forward; **W** lets it lead (faster), **S** holds it back,
+  **Shift** sinks faster, **A** and **D** bank it into a turn (hold them to spiral down). The
+  jumper swings under the canopy as it tilts.
+- **The camera:** in free fall it tilts with the jumper, pulls back while they manoeuvre, and
+  shakes in the wind with wisps streaming past, more the faster they go; under the canopy it
+  moves out and up, looking down on them, and turns with them.
+- **The animations:** the mod ships its own player animation graph, the game's with the jump's
+  tilts, poses and blends added, made from the installed game's at every build.
+
 ## 0.5.7 - 2026-11-20
 
 - **Street lamps that were dark at night are lit.** Expansion lights only the lamps the server
