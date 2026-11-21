@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 - 2026-11-21
+
+- **Much more loot, put out as you come near.** A building's loot goes out once a player is
+  within 200 m of it and below 150 m (under the canopy, or on foot), not all over the map at
+  the start. 4 buildings in 5 have loot (was about half): half of those are **armouries** (6
+  guns, armour, medical, grenades: about 60 things), the rest have enough for 2 or 3 players.
+  Loot pops in as you get close.
+- **Loot on the roofs:** a flat roof has a gun, armour and medical on it a third of the time,
+  on top of what's inside, and the tower blocks on Chernarus always have two of those, so
+  you can pick one under the canopy and land on it.
+- **Loot well outside the circle goes** as it shrinks, once it's 100 m outside; anything
+  someone carries stays.
+- **Rounds start straight away:** the lobby no longer waits for the loot to be put out.
+- **Nasdara and Livonia need nothing extra:** their lobby places are in BattleDayZ itself;
+  the BattleDayZ Nasdara and BattleDayZ Livonia server add-ons are gone.
+- Settings: `lootShare`, `armouryShare`, `roofLootShare`, `lootRadius`, `lootHeight`,
+  `lootItemCap` and `lootClearBeyond` replace `lootBuildings`. Testing: `testRoofs`.
+
 ## 0.6.0 - 2026-11-20
 
 - **Manoeuvring in free fall:** with no keys you drift forward; **W** tracks (tilted forward,

@@ -23,4 +23,3 @@ local @BetterExplosions
 local @Molotov
 local @BetterExplosions_Expansion
 local @BattleDayZ
-local @BattleDayZ_Nasdara server

@@ -1,14 +1,14 @@
 // What's particular to each map, kept apart from the rules of the game: a profile per map,
-// picked by the world's name when the server starts. The core mod has Chernarus (it comes
-// with the game); a DLC or third-party map gets its profile from a small extension mod
-// (BattleDayZ_Nasdara, say), which adds it with
+// picked by the world's name when the server starts. The mod has Chernarus, Livonia and
+// Nasdara's (below); another map gets one by adding a BR_Map subclass to Register, here or
+// from a small extension mod of its own with
 //
 //   modded class BR_Maps
 //   {
 //       override void Register()
 //       {
 //           super.Register();
-//           Add(new BR_MapNasdara());
+//           Add(new BR_MapSomewhere());
 //       }
 //   }
 //
@@ -107,14 +107,49 @@ class BR_MapChernarus: BR_Map
 	}
 }
 
+// Livonia's world is called enoch
+class BR_MapLivonia: BR_Map
+{
+	void BR_MapLivonia()
+	{
+		m_World = "enoch";
+		m_Title = "Livonia";
+	}
+
+	override void Lobbies()
+	{
+		AddLobby(new BR_LobbySpec("branzow_castle", "Branzow castle", 1060, 11400, 60));
+		AddLobby(new BR_LobbySpec("brena_square", "Brena square", 6536, 11265, 45));      // round the monument
+		AddLobby(new BR_LobbySpec("lukow_airfield", "Lukow airfield", 4225, 10408, 50));  // round the control tower
+	}
+}
+
+class BR_MapNasdara: BR_Map
+{
+	void BR_MapNasdara()
+	{
+		m_World = "nasdara";
+		m_Title = "Nasdara";
+	}
+
+	override void Lobbies()
+	{
+		AddLobby(new BR_LobbySpec("qalat_e_lut", "Qalat-e-Lut", 14837, 7853, 45, 3));     // the caravanserai, on ground 3 m above the dip at its middle
+		AddLobby(new BR_LobbySpec("airport_junkyard", "the airport junkyard", 12290, 11350, 80));
+		AddLobby(new BR_LobbySpec("kirov_dam", "Kirov dam", 3560, 14440, 60));
+	}
+}
+
 class BR_Maps
 {
 	protected static ref array<ref BR_Map> s_Maps;
 
-	// the profiles: extension mods add theirs by overriding this (see the top of the file)
+	// the profiles: an extension mod can add one by overriding this (see the top of the file)
 	void Register()
 	{
 		Add(new BR_MapChernarus());
+		Add(new BR_MapLivonia());
+		Add(new BR_MapNasdara());
 	}
 
 	void Add(BR_Map profile)

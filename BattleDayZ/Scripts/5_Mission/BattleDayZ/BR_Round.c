@@ -18,8 +18,8 @@
 class BR_Round
 {
 	static const float LOBBY_LEASH = 30;   // lobby players further than this from it are brought back
-	static const int LOOT_STEP_MS = 100;   // the lobby puts out loot this often...
-	static const int LOOT_PER_STEP = 30;   // ...in this many buildings (6000 take about 20 s)
+	static const int LOOT_STEP_MS = 100;   // loot goes out this often, near the players (BR_LootZones)
+	static const float LOOT_CLEAR_SECONDS = 5; // loot well outside the circle is cleared this often
 	static const float STORM_HIT_SECONDS = 3;     // the storm cuts this often
 	static const string STORM_AMMO = "MeleeZombie"; // a zombie scratch: 5 health, 10 shock, no cut of its own
 	static const float STORM_AMMO_HEALTH = 5;
@@ -93,11 +93,9 @@ class BR_Round
 	static const float BOARDING_MAX_SECONDS = 60; // a game that never says it's ready doesn't hold everyone
 	protected ref map<string, PlayerBase> m_InPlane = new map<string, PlayerBase>();
 
-	// the next round's loot, put out during the lobby
-	protected ref array<int> m_LootQueue;
-	protected int m_LootNext;
-	protected int m_LootBuildings;
-	protected int m_PrepStarted;
+	// the round's loot, put out as players come near; the next round's cars, during the lobby
+	protected ref BR_LootZones m_Zones;
+	protected float m_NextLootClear;
 	protected bool m_Prepared;
 
 	static void Start()
@@ -139,6 +137,7 @@ class BR_Round
 	{
 		m_Settings = BR_Settings.Load();
 		m_Spots = BR_Spots.Load();
+		m_Zones = new BR_LootZones(m_Spots, m_Settings);
 
 		array<string> types = BR_Loot.AllTypes();
 		int missing = 0;
@@ -193,6 +192,8 @@ class BR_Round
 		string test;
 		if (!GetGame().CommandlineGetParam("missiontest", test))
 			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(PrepareRound, 30000, false);
+		if (m_Settings.testRoofs)
+			TestRoofSurvey();
 		Print("[BattleDayZ] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(Tick, 1000, true);
@@ -611,56 +612,58 @@ class BR_Round
 
 	// --- getting the next round ready (during the lobby) -----------------------------
 
-	// pick the circles' final point and the first circle, and start putting out the loot and
-	// cars all over the map, a few buildings at a time
+	// pick the circles' final point and the first circle, and put out the cars and boats all
+	// over the map (the loot goes out during the round, near the players: BR_LootZones)
 	void PrepareRound()
 	{
-		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
 		m_Final = PickFinal();
 		float r;
 		FirstCircle(m_Final, m_Center, r);
 		m_Radius = r;
 		Print("[BattleDayZ] the last circle will close at " + m_Final);
 
-		// loot all over the map, in lootBuildings of its buildings picked at random: nothing to do
-		// with the circles
-		float world = GetGame().GetWorld().GetWorldSize();
-		m_LootQueue = BR_Loot.BuildingsInside(m_Spots, Vector(world / 2, 0, world / 2), world);
-		m_LootNext = 0;
-		m_LootBuildings = 0;
-		m_Prepared = false;
-		m_PrepStarted = GetGame().GetTime();
-		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LootStep, LOOT_STEP_MS, true);
-	}
-
-	void LootStep()
-	{
-		int tried = 0;
-		while (tried < LOOT_PER_STEP && m_LootNext < m_LootQueue.Count() && m_LootBuildings < m_Settings.lootBuildings)
-		{
-			if (BR_Loot.LootBuilding(m_Spots, m_LootQueue[m_LootNext], m_Spawned))
-				m_LootBuildings++;
-			m_LootNext++;
-			tried++;
-		}
-		if (m_LootNext < m_LootQueue.Count() && m_LootBuildings < m_Settings.lootBuildings)
-			return;
-
-		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
-		int items = m_Spawned.Count();
-		// the vehicles go all over the map too
+		int started = GetGame().GetTime();
+		int before = m_Spawned.Count();
 		float world = GetGame().GetWorld().GetWorldSize();
 		int cars = BR_Loot.Cars(m_Spots, Vector(world / 2, 0, world / 2), world, m_Settings.cars, m_Settings.carFuel, m_Settings.vehicles, m_Spawned, m_Settings.carSquare, m_Lobby);
 		int boats = BR_Loot.Boats(m_Spots, m_Settings.boats, m_Settings.carFuel, m_Settings.boatTypes, m_Spawned);
 		m_Vehicles.Clear();
-		for (int v = items; v < m_Spawned.Count(); v++)
+		for (int v = before; v < m_Spawned.Count(); v++)
 		{
 			if (Transport.Cast(m_Spawned[v]))
 				m_Vehicles.Insert(m_Spawned[v]);
 		}
 		m_Prepared = true;
-		float seconds = (GetGame().GetTime() - m_PrepStarted) / 1000.0;
-		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", loot in " + m_LootBuildings + " buildings (" + items + " things), " + cars + " cars, " + boats + " boats, put out over " + seconds + " s");
+		float seconds = (GetGame().GetTime() - started) / 1000.0;
+		Print("[BattleDayZ] next round ready: circle " + m_Center + " r " + m_Radius + ", " + cars + " cars, " + boats + " boats, put out in " + seconds + " s");
+	}
+
+	// the round's loot, near the players: the next few buildings
+	void LootStep()
+	{
+		m_Zones.PutOut();
+	}
+
+	// once a second in the round: the buildings near every player low enough (not on the
+	// plane), and every LOOT_CLEAR_SECONDS the loot well outside the circle (once there is
+	// one, and not once the storm is everywhere)
+	void UpdateLoot(float now)
+	{
+		for (int i = 0; i < m_Alive.Count(); i++)
+		{
+			PlayerBase player = m_Alive.GetElement(i);
+			if (!player || InPlane(player))
+				continue;
+			vector pos = player.GetPosition();
+			if (m_Zones.Counts(pos))
+				m_Zones.Near(pos);
+		}
+		if (now < m_NextLootClear || m_WholeMap || m_Storm)
+			return;
+		m_NextLootClear = now + LOOT_CLEAR_SECONDS;
+		int cleared = m_Zones.Clear(m_Center, m_Radius);
+		if (cleared > 0)
+			Print("[BattleDayZ] cleared " + cleared + " things of loot more than " + m_Settings.lootClearBeyond + " m outside the circle (r " + m_Radius + "), " + m_Zones.Out() + " still out");
 	}
 
 	// --- starting a round: everyone in the lobby onto the plane ------------------------
@@ -733,13 +736,23 @@ class BR_Round
 		if (!m_Settings.testStorm)
 		{
 			// everyone boards; it takes off once every game is ready (UpdateBoarding)
-			m_Flight = BR_Flight.Plan(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
+			if (m_Settings.testRoofs)
+				m_Flight = BR_Flight.PlanAcross(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed, m_Settings.testRoofsZ);
+			else
+				m_Flight = BR_Flight.Plan(GetGame().GetWorld().GetWorldSize(), m_Settings.planeHeight, m_Settings.planeSpeed);
 			m_Flight.started = Now();
 			m_Boarding = true;
 			m_BoardingSince = Now();
 			m_Boarded.Clear();
 			BR_Plane.Set(m_Flight.PositionAt(Now()), vector.Zero);
 		}
+
+		m_Zones.Reset();
+		m_NextLootClear = 0;
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LootStep, LOOT_STEP_MS, true);
+		if (m_Settings.testRoofs)
+			TestRoofs();
 
 		// everyone in the lobby onto the plane
 		array<PlayerBase> players = LobbyPlayers(men);
@@ -1009,6 +1022,7 @@ class BR_Round
 		}
 		UpdateFlight(now);
 		UpdateZone(now);
+		UpdateLoot(now);
 
 		// the storm cuts: a real hit every STORM_HIT_SECONDS (the player flinches, grunts, sees the
 		// red splatter and may start bleeding), scaled so it takes circleDamage health a second
@@ -1270,6 +1284,8 @@ class BR_Round
 	void Cleanup()
 	{
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(LootStep);
+		Print("[BattleDayZ] round " + m_Round + " loot: " + m_Zones.Summary());
+		m_Zones.DeleteAll();
 		m_Prepared = false;
 		m_Flight = null;
 		m_Boarding = false;
@@ -1388,6 +1404,8 @@ class BR_Round
 		state.timeSet = m_TimeSet;
 		if (m_Settings.testShowFinal && m_Phase == BR_Phase.GAME)
 			state.finalPos = m_Final;
+		if (m_Settings.testRoofs && m_Phase == BR_Phase.GAME)
+			state.roofPiles.InsertAll(m_RoofPiles);
 		if (m_Settings.testShowVehicles)
 		{
 			foreach (Object vehicle : m_Vehicles)
@@ -1460,6 +1478,76 @@ class BR_Round
 	// --- headless check (mission started with -missiontest) -------------------------
 
 	protected ref array<Object> m_TestCars = new array<Object>();
+
+	// testRoofs: a pile on every flat roof of the loot buildings within testRoofsRadius m of
+	// testRoofsX/Z, as the round starts; the plane flies over it (StartRound), and each game logs
+	// how far away each pile was when it arrived on it (BR_MissionGameplay.BR_TestRoofs)
+	protected ref array<vector> m_RoofPiles = new array<vector>();
+
+	// testRoofs, as the server starts: for every type of loot building within testRoofsRadius
+	// m of testRoofsX/Z, how many have a flat roof, and for the first two of a type without
+	// one, why not (BR_Loot.RoofReport)
+	void TestRoofSurvey()
+	{
+		vector center = Vector(m_Settings.testRoofsX, 0, m_Settings.testRoofsZ);
+		map<string, int> total = new map<string, int>();
+		map<string, int> flat = new map<string, int>();
+		map<string, int> reported = new map<string, int>();
+		array<BR_Building> roofs = m_Spots.RoofBuildings();
+		for (int i = 0; i < roofs.Count(); i++)
+		{
+			BR_Building b = roofs[i];
+			if (BR_Loot.Distance2D(Vector(b.x, 0, b.z), center) >= m_Settings.testRoofsRadius)
+				continue;
+			string type = m_Spots.protos[b.t].type;
+			Object obj = BR_Loot.FindBuilding(type, Vector(b.x, b.y, b.z));
+			if (!obj)
+				continue;
+			total.Set(type, total.Get(type) + 1);
+			vector spot;
+			if (BR_Loot.RoofSpot(obj, spot))
+			{
+				flat.Set(type, flat.Get(type) + 1);
+				continue;
+			}
+			if (reported.Get(type) >= 2)
+				continue;
+			reported.Set(type, reported.Get(type) + 1);
+			Print("[BRTest] roof survey: " + type + " at " + obj.GetPosition() + ": " + BR_Loot.RoofReport(obj));
+		}
+		foreach (string t, int n : total)
+			Print("[BRTest] roof survey: " + t + ": " + flat.Get(t) + " of " + n + " flat");
+	}
+	void TestRoofs()
+	{
+		m_RoofPiles.Clear();
+		vector center = Vector(m_Settings.testRoofsX, 0, m_Settings.testRoofsZ);
+		float started = GetGame().GetTickTime();
+		int buildings = 0;
+		int missing = 0;
+		int items = m_Spawned.Count();
+		array<BR_Building> roofs = m_Spots.RoofBuildings();
+		for (int i = 0; i < roofs.Count(); i++)
+		{
+			BR_Building b = roofs[i];
+			if (BR_Loot.Distance2D(Vector(b.x, 0, b.z), center) >= m_Settings.testRoofsRadius)
+				continue;
+			buildings++;
+			Object obj = BR_Loot.FindBuilding(m_Spots.protos[b.t].type, Vector(b.x, b.y, b.z));
+			if (!obj)
+			{
+				missing++;
+				continue;
+			}
+			vector spot;
+			if (!BR_Loot.RoofSpot(obj, spot))
+				continue;
+			BR_Loot.TestRoofPile(spot, m_Spawned);
+			m_RoofPiles.Insert(spot);
+			Print("[BRTest] roofs: pile on " + obj.GetType() + " at " + spot + ", " + (spot[1] - GetGame().SurfaceY(spot[0], spot[2])) + " m up");
+		}
+		Print("[BRTest] roofs: " + buildings + " buildings within " + m_Settings.testRoofsRadius + " m of " + center + " (" + missing + " not found), " + m_RoofPiles.Count() + " with a flat roof, " + (m_Spawned.Count() - items) + " things on them, in " + (GetGame().GetTickTime() - started) + " s");
+	}
 	protected PlayerBase m_TestBody;
 
 	void SelfTest()
@@ -1477,11 +1565,42 @@ class BR_Round
 		}
 		Print("[BRTest] " + types.Count() + " loot classes, " + missing + " unknown");
 
+		// the loot near a player standing in a town (the busiest of a few buildings picked at
+		// random), all at once; then cleared as if the circle were a small one round them
+		Print("[BRTest] loot: picking a busy spot");
 		BR_Building anchor = m_Spots.buildings.GetRandomElement();
+		int busiest = 0;
+		for (int pick = 0; pick < 20; pick++)
+		{
+			BR_Building tryAt = m_Spots.buildings.GetRandomElement();
+			int near = 0;
+			foreach (BR_Building nb : m_Spots.buildings)
+			{
+				if (BR_Loot.Distance2D(Vector(nb.x, 0, nb.z), Vector(tryAt.x, 0, tryAt.z)) < m_Settings.lootRadius)
+					near++;
+			}
+			if (near > busiest)
+			{
+				busiest = near;
+				anchor = tryAt;
+			}
+		}
 		m_Center = Vector(anchor.x, 0, anchor.z);
 		m_Radius = 1500;
 		m_Final = m_Center; // (this test's circle is a small one round a building)
-		int buildings = BR_Loot.Buildings(m_Spots, m_Center, m_Radius, 300, m_Spawned);
+		Print("[BRTest] loot: testing near " + m_Center + ", " + busiest + " loot buildings within " + m_Settings.lootRadius + " m");
+		m_Zones.Reset();
+		int lootStarted = GetGame().GetTime();
+		m_Zones.Near(Vector(anchor.x, anchor.y, anchor.z));
+		int waiting = m_Zones.Waiting();
+		Print("[BRTest] loot: " + waiting + " buildings to loot");
+		m_Zones.Drain();
+		Print("[BRTest] loot near " + m_Center + ": " + waiting + " buildings within " + m_Settings.lootRadius + " m, " + m_Zones.Summary() + ", in " + (GetGame().GetTime() - lootStarted) + " ms");
+		int outBefore = m_Zones.Out();
+		int cleared = m_Zones.Clear(m_Center, 20);
+		Print("[BRTest] loot clear (circle r 20 m round it, " + m_Settings.lootClearBeyond + " m beyond): " + cleared + " of " + outBefore + " things went, " + m_Zones.Out() + " left");
+		int buildings = waiting;
+		m_Zones.Handover(m_Spawned);
 		int items = m_Spawned.Count();
 		int cars = BR_Loot.Cars(m_Spots, m_Center, 4000, 10, m_Settings.carFuel, m_Settings.vehicles, m_Spawned);
 		int boatsMade = BR_Loot.Boats(m_Spots, Math.Min(m_Settings.boats, 3), m_Settings.carFuel, m_Settings.boatTypes, m_Spawned);

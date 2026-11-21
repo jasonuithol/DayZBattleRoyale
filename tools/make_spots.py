@@ -6,6 +6,8 @@
   buildings  every such building on the map: index into protos and world position
              (from mapgrouppos.xml); the game turns a point into world space with the
              building's own ModelToWorld, so no rotation maths here
+  bare       the tower blocks (ROOF_ONLY): no vanilla loot points, so no loot inside, but a
+             flat roof with a way down, which has some
   cars       the vanilla car, bike and truck spawn points (the Vehicle* events of
              cfgeventspawns.xml)
   boats      its boat spawn points (VehicleBoat)
@@ -37,16 +39,22 @@ for name, body in re.findall(r'<group name="([^"]+)"[^>]*>(.*?)</group>', proto_
     pts = []
     for p in re.findall(r'<point pos="([^"]+)"', body):
         pts += [round(float(v), 3) for v in p.split()]
-    if pts:
-        index[name] = len(protos)
-        protos.append({'type': name, 'pts': pts})
+    index[name] = len(protos)
+    protos.append({'type': name, 'pts': pts})
 
-buildings = []
+# buildings with no loot points whose roofs still get loot: a ladder and stairs down from the roof
+ROOF_ONLY = {'Land_Tenement_Big', 'Land_Tenement_Small'}
+
+buildings, bare = [], []
 pos_xml = open(os.path.join(vanilla, 'mapgrouppos.xml')).read()
 for name, pos in re.findall(r'<group name="([^"]+)" pos="([^"]+)"', pos_xml):
     if name in index:
         x, y, z = (round(float(v), 2) for v in pos.split())
-        buildings.append({'t': index[name], 'x': x, 'y': y, 'z': z})
+        spot = {'t': index[name], 'x': x, 'y': y, 'z': z}
+        if protos[index[name]]['pts']:
+            buildings.append(spot)
+        elif name in ROOF_ONLY:
+            bare.append(spot)
 
 cars, boats = [], []
 events = open(os.path.join(vanilla, 'cfgeventspawns.xml')).read()
@@ -58,6 +66,6 @@ for name, body in re.findall(r'<event name="(Vehicle[^"]*)">(.*?)</event>', even
             spot = {'x': round(float(v['x']), 2), 'z': round(float(v['z']), 2), 'h': round(h, 1), 'types': name}
             (boats if 'Boat' in name else cars).append(spot)
 
-json.dump({'protos': protos, 'buildings': buildings, 'cars': cars, 'boats': boats}, open(out, 'w'), separators=(',', ':'))
-print('%s: %d building types, %d buildings, %d loot points, %d car spots, %d boat spots' % (
-    out, len(protos), len(buildings), sum(len(protos[b['t']]['pts']) // 3 for b in buildings), len(cars), len(boats)))
+json.dump({'protos': protos, 'buildings': buildings, 'bare': bare, 'cars': cars, 'boats': boats}, open(out, 'w'), separators=(',', ':'))
+print('%s: %d building types, %d buildings, %d loot points, %d bare buildings, %d car spots, %d boat spots' % (
+    out, len(protos), len(buildings), sum(len(protos[b['t']]['pts']) // 3 for b in buildings), len(bare), len(cars), len(boats)))

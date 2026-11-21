@@ -59,6 +59,7 @@ class BR_State
 	vector finalPos;   // testing (testShowFinal): where the last circle closes, marked on the map (zero: not shown)
 	ref array<vector> vehicles = new array<vector>(); // testing (testShowVehicles): every car and boat,
 	ref array<bool> vehicleIsBoat = new array<bool>(); // marked on the map
+	ref array<vector> roofPiles = new array<vector>(); // testing (testRoofs): the piles on the roofs
 	int timeSet;       // goes up every time the server sets the round's time: each game then sets its own
 
 	void Write(ParamsWriteContext ctx)
@@ -105,6 +106,9 @@ class BR_State
 			ctx.Write(vehicles[v]);
 			ctx.Write(vehicleIsBoat[v]);
 		}
+		ctx.Write(roofPiles.Count());
+		foreach (vector pile : roofPiles)
+			ctx.Write(pile);
 	}
 
 	bool Read(ParamsReadContext ctx)
@@ -125,7 +129,22 @@ class BR_State
 			return false;
 		if (!ctx.Read(lobbySlot0) || !ctx.Read(lobbySlots) || !ctx.Read(lobbyApart))
 			return false;
-		return ctx.Read(boarding) && ctx.Read(roundHour) && ctx.Read(roundDay) && ctx.Read(timeSet) && ctx.Read(finalPos) && ReadVehicles(ctx);
+		return ctx.Read(boarding) && ctx.Read(roundHour) && ctx.Read(roundDay) && ctx.Read(timeSet) && ctx.Read(finalPos) && ReadVehicles(ctx) && ReadRoofPiles(ctx);
+	}
+
+	bool ReadRoofPiles(ParamsReadContext ctx)
+	{
+		int count;
+		if (!ctx.Read(count))
+			return false;
+		for (int i = 0; i < count; i++)
+		{
+			vector at;
+			if (!ctx.Read(at))
+				return false;
+			roofPiles.Insert(at);
+		}
+		return true;
 	}
 
 	bool ReadVehicles(ParamsReadContext ctx)

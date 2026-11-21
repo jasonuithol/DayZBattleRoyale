@@ -187,87 +187,304 @@ class BR_Loot
 			Item("Matchbox", pos, spawned);
 		}
 		else if (roll < 91)
-		{
-			// medical: a bandage half the time, else morphine, epinephrine (adrenaline, which
-			// heals fully: BR_Medical.c) or the PO-X antidote (gas poisoning)
-			int med = Math.RandomInt(0, 20);
-			if (med < 10)
-				Item("BandageDressing", pos, spawned);
-			else if (med < 14)
-				Item("Morphine", pos, spawned);
-			else if (med < 17)
-				Item("Epinephrine", pos, spawned);
-			else
-				Item("AntiChemInjector", pos, spawned);
-		}
+			Medical(pos, spawned);
+		else
+			Fuel(pos, spawned);
+	}
+
+	// medical: a bandage half the time, else morphine, epinephrine (adrenaline, which heals
+	// fully: BR_Medical.c) or the PO-X antidote (gas poisoning)
+	static void Medical(vector pos, array<Object> spawned)
+	{
+		int med = Math.RandomInt(0, 20);
+		if (med < 10)
+			Item("BandageDressing", pos, spawned);
+		else if (med < 14)
+			Item("Morphine", pos, spawned);
+		else if (med < 17)
+			Item("Epinephrine", pos, spawned);
+		else
+			Item("AntiChemInjector", pos, spawned);
+	}
+
+	// a jerrycan half full of petrol, for the cars (their tanks are nearly empty)
+	static void Fuel(vector pos, array<Object> spawned)
+	{
+		ItemBase can = ItemBase.Cast(Item("CanisterGasoline", pos, spawned));
+		if (can)
+			can.SetQuantity(can.GetQuantityMax() * 0.5);
+	}
+
+	// one more useful thing: a backpack, a sight or other attachment, a grenade, or a molotov
+	static void Extra(vector pos, array<Object> spawned)
+	{
+		int roll = Math.RandomInt(0, 4);
+		if (roll == 0)
+			Item(Tiered(s_Backpacks), pos, spawned);
+		else if (roll == 1)
+			WithBattery(Item(s_Attachments.GetRandomElement(), pos, spawned));
+		else if (roll == 2)
+			Item(s_Grenades.GetRandomElement(), pos, spawned);
 		else
 		{
-			ItemBase can = ItemBase.Cast(Item("CanisterGasoline", pos, spawned));
-			if (can)
-				can.SetQuantity(can.GetQuantityMax() * 0.5);
+			Item("Molotov", pos, spawned);
+			Item("Matchbox", pos, spawned);
 		}
 	}
 
-	// Loot in up to `count` buildings within radius of center: one pile, two in bigger buildings.
-	// every building inside the circle, in random order: the lobby works through them a few
-	// at a time (BR_Round.LootStep) so the server never stalls
-	static array<int> BuildingsInside(BR_Spots spots, vector center, float radius)
+	// --- loot as players come near (BR_LootZones) ------------------------------------
+
+	static const float OUTFIT_SPREAD = 0.3; // m from its spot: close enough to stay off the walls
+
+	// enough for one player, round one spot: a loaded gun and its ammo, a vest, a helmet half
+	// the time, two medical things and one more (Extra). About 11 things.
+	static void Outfit(vector spot, array<Object> spawned, float spread = OUTFIT_SPREAD)
 	{
-		array<int> inside = new array<int>();
-		for (int i = 0; i < spots.buildings.Count(); i++)
-		{
-			BR_Building b = spots.buildings[i];
-			if (Distance2D(Vector(b.x, 0, b.z), center) < radius)
-				inside.Insert(i);
-		}
-		// shuffle
-		for (int k = inside.Count() - 1; k > 0; k--)
-		{
-			int swap = Math.RandomInt(0, k + 1);
-			int keep = inside[k];
-			inside[k] = inside[swap];
-			inside[swap] = keep;
-		}
-		return inside;
+		Init();
+		WeaponPile(s_Weapons.GetRandomElement(), spot, spawned);
+		Item(Tiered(s_Vests), Around(spot, spread), spawned);
+		if (Math.RandomIntInclusive(0, 1) == 0)
+			Item(Tiered(s_Helmets), Around(spot, spread), spawned);
+		Medical(Around(spot, spread), spawned);
+		Medical(Around(spot, spread), spawned);
+		Extra(Around(spot, spread), spawned);
 	}
 
-	// loot in one building: one pile per 5 loot points, at least 1 and at most 4, each on a
-	// different point. False if the building isn't there (destroyed, or the map changed).
-	static bool LootBuilding(BR_Spots spots, int index, array<Object> spawned)
+	// a building that equips several players: an outfit each at different loot points, two
+	// (three in a building with ARMED_BIG_POINTS or more), and a jerrycan a quarter of the time
+	static const int ARMED_BIG_POINTS = 10;
+	static void Armed(BR_Points points, array<Object> spawned)
 	{
-		BR_Building building = spots.buildings[index];
-		BR_Proto kind = spots.protos[building.t];
-		Object obj = FindBuilding(kind.type, Vector(building.x, building.y, building.z));
-		if (!obj)
+		int outfits = 2;
+		if (points.Count() >= ARMED_BIG_POINTS)
+			outfits = 3;
+		for (int i = 0; i < outfits; i++)
+			Outfit(points.Next(), spawned);
+		if (Math.RandomIntInclusive(0, 3) == 0)
+			Fuel(points.Next(), spawned);
+	}
+
+	// an armoury: guns all over the building, not the best of everything (helmets, vests and
+	// backpacks at their usual tiers). About 60 things.
+	static const int ARMOURY_GUNS = 6;
+	static const int ARMOURY_VESTS = 4;
+	static const int ARMOURY_HELMETS = 4;
+	static const int ARMOURY_BACKPACKS = 2;
+	static const int ARMOURY_MEDICAL = 6;
+	static const int ARMOURY_GRENADES = 3;
+	static const int ARMOURY_ATTACHMENTS = 2;
+	static void Armoury(BR_Points points, array<Object> spawned)
+	{
+		Init();
+		int i;
+		for (i = 0; i < ARMOURY_GUNS; i++)
+			WeaponPile(s_Weapons.GetRandomElement(), points.Next(), spawned);
+		for (i = 0; i < ARMOURY_VESTS; i++)
+			Item(Tiered(s_Vests), points.Next(), spawned);
+		for (i = 0; i < ARMOURY_HELMETS; i++)
+			Item(Tiered(s_Helmets), points.Next(), spawned);
+		for (i = 0; i < ARMOURY_BACKPACKS; i++)
+			Item(Tiered(s_Backpacks), points.Next(), spawned);
+		for (i = 0; i < ARMOURY_MEDICAL; i++)
+			Medical(points.Next(), spawned);
+		for (i = 0; i < ARMOURY_GRENADES; i++)
+			Item(s_Grenades.GetRandomElement(), points.Next(), spawned);
+		for (i = 0; i < ARMOURY_ATTACHMENTS; i++)
+			WithBattery(Item(s_Attachments.GetRandomElement(), points.Next(), spawned));
+		vector molotov = points.Next();
+		Item("Molotov", molotov, spawned);
+		Item("Matchbox", molotov, spawned);
+		Fuel(points.Next(), spawned);
+	}
+
+	// the light loot of a building (once lootItemCap things are out): one pile per 5 loot
+	// points, at least 1 and at most 4
+	static void Light(BR_Points points, array<Object> spawned)
+	{
+		int piles = Math.Clamp(1 + points.Count() / 5, 1, 4);
+		for (int n = 0; n < piles; n++)
+			Pile(points.Next(), spawned);
+	}
+
+	// a spot this far round another, at the same height (on the floor there)
+	static vector Around(vector spot, float spread)
+	{
+		return OnFloor(spot + Vector(Math.RandomFloat(-spread, spread), 0, Math.RandomFloat(-spread, spread)));
+	}
+
+	// --- roofs ------------------------------------------------------------------------
+
+	// A flat roof: looking straight down on the building from above its collision box, on a
+	// grid ROOF_STEP m apart, the highest places at least ROOF_MIN m above its foot where the
+	// first thing hit is the building itself, and the four places ROOF_STEP m either way are too,
+	// as high to within ROOF_LEVEL m: room for a pile, and to land. One picked at random. (The
+	// raycast's normal can't tell flat from sloped: it comes back pointing down, any length.)
+	static const float ROOF_STEP = 1.5;
+	static const float ROOF_LEVEL = 0.25;
+	static const float ROOF_MIN = 2.5;
+	static const int ROOF_MAX_POINTS = 4000; // about 95 m square: anything bigger (a dam, an airfield) isn't a roof to land on
+
+	static bool RoofSpot(Object building, out vector spot)
+	{
+		vector box[2];
+		if (!building.GetCollisionBox(box))
 			return false;
-
-		int points = kind.pts.Count() / 3;
-		int piles = Math.Clamp(1 + points / 5, 1, 4);
-		array<int> free = new array<int>();
-		for (int f = 0; f < points; f++)
-			free.Insert(f);
-		for (int n = 0; n < piles && free.Count() > 0; n++)
+		float baseY = building.GetPosition()[1];
+		float fromY = baseY + box[1][1] + 5;
+		float toY = baseY + box[0][1] - 1;
+		float footY = baseY + box[0][1];
+		int nx = Math.Floor((box[1][0] - box[0][0]) / ROOF_STEP) + 1;
+		int nz = Math.Floor((box[1][2] - box[0][2]) / ROOF_STEP) + 1;
+		if (nx < 3 || nz < 3 || nx * nz > ROOF_MAX_POINTS)
+			return false;
+		// the height of the building's top at each point of the grid (NO_ROOF: something else, or nothing)
+		array<float> top = new array<float>();
+		array<vector> at = new array<vector>();
+		for (int i = 0; i < nx; i++)
 		{
-			int at = Math.RandomInt(0, free.Count());
-			int p = free[at];
-			free.Remove(at);
-			vector point = Vector(kind.pts[p * 3], kind.pts[p * 3 + 1], kind.pts[p * 3 + 2]);
-			Pile(OnFloor(obj.ModelToWorld(point)), spawned);
+			for (int j = 0; j < nz; j++)
+			{
+				vector p = building.ModelToWorld(Vector(box[0][0] + i * ROOF_STEP, 0, box[0][2] + j * ROOF_STEP));
+				at.Insert(p);
+				top.Insert(TopOf(building, p[0], p[2], fromY, toY));
+			}
 		}
+		float best = NO_ROOF;
+		array<int> flat = new array<int>();
+		for (int a = 1; a < nx - 1; a++)
+		{
+			for (int b = 1; b < nz - 1; b++)
+			{
+				float y = top[a * nz + b];
+				if (y < footY + ROOF_MIN)
+					continue;
+				if (!Level(top[(a - 1) * nz + b], y) || !Level(top[(a + 1) * nz + b], y) || !Level(top[a * nz + b - 1], y) || !Level(top[a * nz + b + 1], y))
+					continue;
+				flat.Insert(a * nz + b);
+				best = Math.Max(best, y);
+			}
+		}
+		array<int> highest = new array<int>();
+		foreach (int k : flat)
+		{
+			if (top[k] > best - 1)
+				highest.Insert(k);
+		}
+		if (highest.Count() == 0)
+			return false;
+		int pick = highest.GetRandomElement();
+		spot = Vector(at[pick][0], top[pick] + 0.05, at[pick][2]);
 		return true;
 	}
 
-	// all at once (the headless test)
-	static int Buildings(BR_Spots spots, vector center, float radius, int count, array<Object> spawned)
+	static const float NO_ROOF = -100000;
+
+	protected static bool Level(float y, float to)
 	{
-		array<int> inside = BuildingsInside(spots, center, radius);
-		int done = 0;
-		for (int i = 0; i < inside.Count() && done < count; i++)
+		return y > NO_ROOF && Math.AbsFloat(y - to) <= ROOF_LEVEL;
+	}
+
+	// the height of the first thing straight down at x, z if it's the building, else NO_ROOF
+	protected static float TopOf(Object building, float x, float z, float fromY, float toY)
+	{
+		vector hit, normal;
+		int component;
+		set<Object> objects = new set<Object>;
+		if (!DayZPhysics.RaycastRV(Vector(x, fromY, z), Vector(x, toY, z), hit, normal, component, objects, null, null, true, false, ObjIntersectGeom))
+			return NO_ROOF;
+		if (objects.Count() == 0 || objects[0] != building)
+			return NO_ROOF;
+		return hit[1];
+	}
+
+	// testing (testRoofs): why a building has no flat roof: what looking straight down on its
+	// grid hits (the building, something else, nothing), how high the building's top is there
+	// (in 0.5 m steps above its foot), and how many places would be flat at looser levels
+	static string RoofReport(Object building)
+	{
+		vector box[2];
+		if (!building.GetCollisionBox(box))
+			return "no collision box";
+		float baseY = building.GetPosition()[1];
+		float fromY = baseY + box[1][1] + 5;
+		float toY = baseY + box[0][1] - 1;
+		float footY = baseY + box[0][1];
+		int nx = Math.Floor((box[1][0] - box[0][0]) / ROOF_STEP) + 1;
+		int nz = Math.Floor((box[1][2] - box[0][2]) / ROOF_STEP) + 1;
+		if (nx * nz > ROOF_MAX_POINTS)
+			return "too big: " + nx + "x" + nz + " points";
+		array<float> top = new array<float>();
+		int onIt = 0;
+		int nothing = 0;
+		map<string, int> others = new map<string, int>();
+		map<int, int> heights = new map<int, int>();
+		for (int i = 0; i < nx; i++)
 		{
-			if (LootBuilding(spots, inside[i], spawned))
-				done++;
+			for (int j = 0; j < nz; j++)
+			{
+				vector p = building.ModelToWorld(Vector(box[0][0] + i * ROOF_STEP, 0, box[0][2] + j * ROOF_STEP));
+				vector hit, normal;
+				int component;
+				set<Object> objects = new set<Object>;
+				float y = NO_ROOF;
+				if (!DayZPhysics.RaycastRV(Vector(p[0], fromY, p[2]), Vector(p[0], toY, p[2]), hit, normal, component, objects, null, null, true, false, ObjIntersectGeom))
+					nothing++;
+				else if (objects.Count() == 0)
+					others.Set("ground", others.Get("ground") + 1);
+				else if (objects[0] != building)
+					others.Set(objects[0].GetType(), others.Get(objects[0].GetType()) + 1);
+				else
+				{
+					onIt++;
+					y = hit[1];
+					int step = Math.Floor((y - footY) * 2);
+					heights.Set(step, heights.Get(step) + 1);
+				}
+				top.Insert(y);
+			}
 		}
-		return done;
+		string text = nx.ToString() + "x" + nz + " points, box " + (box[1][1] - box[0][1]) + " m high: " + onIt + " on it, " + nothing + " nothing";
+		foreach (string type, int n : others)
+			text += ", " + n + " " + type;
+		text += "; its top at (m above its foot: points)";
+		array<int> steps = heights.GetKeyArray();
+		steps.Sort();
+		for (int k = steps.Count() - 1; k >= 0 && k >= steps.Count() - 8; k--)
+			text += " " + (steps[k] * 0.5) + ":" + heights.Get(steps[k]);
+		array<float> levels = {0.25, 0.5, 1.0, 2.0};
+		text += "; flat places at a level of";
+		foreach (float level : levels)
+		{
+			int flat = 0;
+			for (int a = 1; a < nx - 1; a++)
+			{
+				for (int b = 1; b < nz - 1; b++)
+				{
+					float c = top[a * nz + b];
+					if (c < footY + ROOF_MIN)
+						continue;
+					if (Near(top[(a - 1) * nz + b], c, level) && Near(top[(a + 1) * nz + b], c, level) && Near(top[a * nz + b - 1], c, level) && Near(top[a * nz + b + 1], c, level))
+						flat++;
+				}
+			}
+			text += " " + level + " m: " + flat;
+		}
+		return text;
+	}
+
+	protected static bool Near(float y, float to, float level)
+	{
+		return y > NO_ROOF && Math.AbsFloat(y - to) <= level;
+	}
+
+	// testing (testRoofs): a gun with its ammo, a vest, a helmet and a backpack, round a spot
+	static void TestRoofPile(vector spot, array<Object> spawned)
+	{
+		Init();
+		WeaponPile(s_Weapons.GetRandomElement(), spot, spawned);
+		Item(Tiered(s_Vests), OnFloor(spot + "0.7 0 0"), spawned);
+		Item(Tiered(s_Helmets), OnFloor(spot + "-0.7 0 0"), spawned);
+		Item(Tiered(s_Backpacks), OnFloor(spot + "0 0 0.8"), spawned);
 	}
 
 	static Object FindBuilding(string type, vector pos)
@@ -830,5 +1047,43 @@ class BR_Loot
 		array<EntityAI> items = new array<EntityAI>();
 		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
 		return items.Count() - 1; // not the player
+	}
+}
+
+// A building's loot points, in world space on its floors, in random order: each one once, then
+// round again a little to the side of one (an armoury has more things than a shed has points)
+class BR_Points
+{
+	protected Object m_Building;
+	protected ref array<vector> m_Points = new array<vector>();
+	protected int m_Next;
+	static const float AGAIN_SPREAD = 0.4;
+
+	void BR_Points(Object building, BR_Proto kind)
+	{
+		m_Building = building;
+		int count = kind.pts.Count() / 3;
+		for (int i = 0; i < count; i++)
+			m_Points.Insert(building.ModelToWorld(Vector(kind.pts[i * 3], kind.pts[i * 3 + 1], kind.pts[i * 3 + 2])));
+		for (int k = m_Points.Count() - 1; k > 0; k--)
+			m_Points.SwapItems(k, Math.RandomInt(0, k + 1));
+	}
+
+	int Count()
+	{
+		return m_Points.Count();
+	}
+
+	vector Next()
+	{
+		if (m_Points.Count() == 0)
+			return BR_Loot.OnFloor(m_Building.GetPosition());
+		if (m_Next < m_Points.Count())
+		{
+			vector point = m_Points[m_Next];
+			m_Next++;
+			return BR_Loot.OnFloor(point);
+		}
+		return BR_Loot.Around(m_Points.GetRandomElement(), AGAIN_SPREAD);
 	}
 }

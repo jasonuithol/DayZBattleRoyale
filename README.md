@@ -18,13 +18,11 @@ what comes later.
    nobody can be hurt, and anyone who walks or falls off the edge is brought back. A clock at the top of the screen counts down to the
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
    people can log in, then 3 minutes between rounds (`lobbySeconds`), or less: once everyone
-   waiting has pressed F to say they're ready, the round starts as soon as its loot is out. New characters are created here,
+   waiting has pressed F to say they're ready, the round starts straight away. New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: its circles are picked (the first is as wide as the
-   map, `firstCircle`), and loot is put out in up to 6,000 buildings picked at random
-   all over the map, nothing to do with the circles (`lootBuildings`; 1 to 4 piles each, by
-   size, about 25,000 items), and 100 vehicles spread evenly over the whole map, each equally likely one of: a
+   map, `firstCircle`), and 100 vehicles spread evenly over the whole map, each equally likely one of: a
    motorbike (the vanilla enduro, Motorbike_02), an Ada 4x4, an M1025 or Expansion's Land Rover, in
    a random colour (`vehicles`). Every part is fitted and every fluid full except the tank,
    which has 15% (`carFuel`). Maps with water get boats too (`boats`: 30 on Chernarus, 5 on
@@ -37,8 +35,8 @@ what comes later.
    left the way one might have been: half the time at a vanilla car spot (by a road, in a town)
    if the square has a free one, otherwise parked by whatever structure is about (a house, a
    hangar, a solar farm, an oil derrick, a fort, a wreck), otherwise out in the open, always on
-   flat, clear, dry ground. The loot goes out a few buildings at a time over about 25 s, so
-   the server never stalls.
+   flat, clear, dry ground. The loot isn't put out yet: it goes out during the round, near
+   the players (see [Loot](#loot)).
    Anyone knocked out (or joining) while a round is on watches it instead of waiting: the
    camera follows a player still in the round (the mouse orbits it), F moves on to the next
    and, past the last, back to the lobby (F there watches again). Their own character is held,
@@ -138,7 +136,7 @@ what comes later.
 5. **End.** When one player is left, everyone is told who won and who was the last one out.
    With only one player in the round, it ends when that player dies. After 15 s everything
    the round spawned is deleted: loot, cars, bodies and supply crates. Everyone goes back to
-   the lobby, and the next round starts once its loot is out.
+   the lobby.
 
 ## Testing settings
 
@@ -154,6 +152,10 @@ Five settings in `battleroyale.json`, all off by default, shorten or show a test
 - `testShowFinal`: the point the last circle closes on is marked on the map (a magenta cross).
 - `testShowVehicles`: every car (an orange square) and boat (a cyan diamond) of the round is
   marked on the map, where it is now.
+- `testRoofs` (with `testRoofsX`, `testRoofsZ` and `testRoofsRadius`): the plane flies west to
+  east over that point, every flat roof within the radius gets a pile, and each game logs (and
+  shows in chat) how far away each pile was when it arrived on it. As the server starts it also
+  logs, per building type there, how many roofs are flat and why the others aren't.
 
 A `circleDamage` of `[0]` turns the storm's damage off, and `circleSeconds` of `[10]` makes
 every circle 10 s, for a look at where the circles go.
@@ -161,7 +163,36 @@ every circle 10 s, for a look at where the circles go.
 ## Loot
 
 There is no base building, food or zombies. The Central Economy spawns nothing (see
-each mission's `db/economy.xml`). Each loot spot gets one of these:
+each mission's `db/economy.xml`).
+
+The loot isn't put out all over the map at the start of a round: a building's loot goes out
+once a player in the round comes within 200 m of it (`lootRadius`) no higher than 150 m above
+the ground (`lootHeight`: under the canopy, or on foot), a few buildings at a time. It is
+decided once a round, building by building:
+
+- **Inside:** nothing in 1 building in 5 (`lootShare` 0.8); half of the others are
+  **armouries** (`armouryShare`), the rest are **armed**, with enough for 2 or 3 players.
+  - **Armed:** an *outfit* each at different loot spots (three in buildings with 10 spots or
+    more), and a jerry can a quarter of the time. An outfit is a loaded gun and 3 boxes of its
+    ammo, a vest, a helmet half the time, two medical things and one more: a backpack, an
+    attachment, a grenade or a molotov. About 25 things.
+  - **Armoury:** 6 loaded guns with their ammo, 4 vests, 4 helmets, 2 backpacks, 6 medical
+    things, 3 grenades, 2 attachments, a molotov and a jerry can, all over the building.
+    About 60 things.
+- **Roof:** a flat roof (found by looking straight down on the building: sloped roofs, which
+  have no way down, don't count) has an outfit on it a third of the time (`roofLootShare`),
+  whatever is inside. Chernarus's tower blocks (Land_Tenement_Big and Small, 170 of them, with a
+  ladder and stairs down from the roof) have no loot inside but always two outfits on the roof.
+- **Light:** once 100,000 things are out at once (`lootItemCap`), buildings reached after that
+  get 1 to 4 of the things below instead, one per loot spot, and nothing on the roof.
+
+Loot more than 100 m outside the circle (`lootClearBeyond`) is deleted as the circle shrinks
+(not while the whole map is safe, nor once the storm is everywhere); anything someone carries
+or is inside something else (a backpack, a car) stays. The rest goes when the round ends.
+Guns from a round's loot only show from 75 to 100 m away, at most: from about halfway down
+under the canopy.
+
+The light loot, one of these per loot spot:
 
 | Chance | What |
 |---|---|
@@ -194,18 +225,18 @@ ammo for it, reload works as usual.
   - `5_Mission`: the round itself (`BR_Round.c`), the plane (`BR_Flight.c`), loot, cars and
     supply drops (`BR_Loot.c`), the settings (`BR_Settings.c`), the client HUD, the storm's
     gas and wall, and the F key (`BR_MissionGameplay.c`), and the lines on the map (`BR_Map.c`).
-  - The lobby in the sky (`BR_Lobby.c`) and each map's profile (`BR_Maps.c`, with Chernarus).
+  - The lobby in the sky (`BR_Lobby.c`) and each map's profile (`BR_Maps.c`: Chernarus,
+    Livonia and Nasdara, their lobby places and islands).
     Swapping lobbies: the server moves everyone, takes the old one down 5 s later (deleting
     the floor someone stood on in the same frame crashed the server), and each player's game
     takes down its own copy of the old one's static models (`BR_LobbyGhosts` in `3_Game`).
-- `BattleDayZ_Nasdara/` and `BattleDayZ_Livonia/`: those maps' profiles, each a small
-  server-only mod of its own (`-serverMod=`, after BattleDayZ; players don't need them).
-  Another map gets one the same way: a `BR_Map` subclass with its places, added in a
-  `modded class BR_Maps` (see the top of `BR_Maps.c`).
+- Another map gets a profile the same way: a `BR_Map` subclass with its places, added to
+  `BR_Maps.Register`, here or in a small mod of its own with a `modded class BR_Maps` (see
+  the top of `BR_Maps.c`).
 - `missions/nasdara/`, `missions/chernarusplus/` and `missions/enoch/` (Livonia): the
   `battleroyale.nasdara`, `battleroyale.chernarusplus` and `battleroyale.enoch` missions.
   - `battleroyale.json`: the settings. Every field and its default is in `BR_Settings.c`.
-  - `br_spots.json`: the loot and car spots.
+  - `br_spots.json`: the loot and car spots, and the tower blocks (tools/make_spots.py).
   - `db/economy.xml`: switches the Central Economy off.
   - `expansion/missions/`: deliberately empty, which stops Expansion's own random airdrops.
   - `expansion/settings/MapSettings.json`: Expansion's map settings, with the compass on for
@@ -247,8 +278,7 @@ BattleDayZ mod on the server.
 ## Running it
 
 It uses the DayZMissions tooling. `~/Projects/DayZMissions/mods/BattleDayZ` links to the
-staged build, `build/BattleDayZ`, `mods/BattleDayZ_Nasdara` and `mods/BattleDayZ_Livonia` to
-their folders here, and
+staged build, `build/BattleDayZ`, and
 `missions/battleroyale.<map>` to `missions/<map>/`. Use the full mission name: plain
 `battleroyale` picks the first one alphabetically.
 Run `tools/build.sh` after any change to the mod, scripts included, before starting a
@@ -264,7 +294,8 @@ tools/run_client.sh battleroyale.nasdara   # client with the same mods, connects
 
 What the headless test checks:
 - every loot class exists
-- loot spawns in buildings
+- the loot near a player in a busy spot (every building within 200 m, all at once), then
+  cleared as if a small circle were round them
 - every gun comes loaded (each one spawned once), and which attachments fit which guns
 - one of each vehicle: its parts, fuel and that it's not ruined
 - cars spawn with 15% fuel

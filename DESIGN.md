@@ -29,7 +29,8 @@ The server runs the same loop over and over:
 - **Attachments** are separate, bonus loot: scopes, suppressors, extended magazines.
 - **Also:** medical items and jerry cans. Nothing for base building.
 - The Central Economy is switched off for items. The mod spawns its own loot table at
-  building loot positions each round, and removes all of it when the round ends.
+  building loot positions, building by building as players come near (4 in 5 looted, half of
+  those armouries, extra loot on flat roofs), and removes all of it when the round ends.
 
 ## Cars
 

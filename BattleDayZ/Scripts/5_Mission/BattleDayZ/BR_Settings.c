@@ -20,7 +20,14 @@ class BR_Settings
 	                               // order, round after round (default morning, noon, night: 7, 12, 23)
 	float firstCircle = 1.0;       // the first circle's width, as a share of the map's (it's placed to
 	                               // hold the point the last circle closes on, picked anywhere on the map)
-	int lootBuildings = 6000;      // buildings that get loot, picked at random all over the map (bigger ones get up to 4 piles)
+	// Loot is put out as players come near (BR_LootZones.c), building by building:
+	float lootShare = 0.8;         // the share of buildings with loot inside...
+	float armouryShare = 0.5;      // ...and of those, armouries (the rest: enough for 2-3 players)
+	float roofLootShare = 0.33;    // the chance a flat roof has an outfit on it too (a tower block's always has)
+	float lootRadius = 200;        // m across: a building's loot goes out once a player in the round is this close...
+	float lootHeight = 150;        // ...and no higher than this above the ground (the canopy opens at 150 m)
+	int lootItemCap = 100000;      // past this many things out at once, buildings get light loot (1-4 things)
+	float lootClearBeyond = 100;   // m: loot this far outside the circle goes, once there is a circle
 	int cars = 100;                // vehicles, spread evenly over the whole map (none near the lobby):
 	float carSquare = 1365;        // it's tiled with squares about this size (m), lined up with its
 	                               // edges, that each have the same chance of one: at a vanilla car
@@ -56,6 +63,10 @@ class BR_Settings
 	float testWhiteRadius = 0;     // testing only, with testStorm: that first white circle's radius (0: the usual)
 	int testBots = 0;              // testing only: this many AI survivors join each round, inside the
 	                               // first white circle, and play it out as players (they just stand there)
+	bool testRoofs = false;        // testing only: the plane flies west to east over testRoofsX/Z, and every
+	float testRoofsX = 0;          // flat roof of the loot buildings within testRoofsRadius m of it gets a
+	float testRoofsZ = 0;          // pile (a gun, a vest, a helmet, a backpack); each game logs how far
+	float testRoofsRadius = 300;   // away each pile was when it arrived on it ([BRTest] roofs)
 
 	// per circle, the last value repeating
 	int CircleSeconds(int circle)
@@ -139,6 +150,7 @@ class BR_Spots
 
 	ref array<ref BR_Proto> protos;
 	ref array<ref BR_Building> buildings;
+	ref array<ref BR_Building> bare;      // of types with no loot points (the tower blocks): their roofs only
 	ref array<ref BR_CarSpot> cars;
 	ref array<ref BR_CarSpot> boats;
 
@@ -152,10 +164,23 @@ class BR_Spots
 			s.protos = new array<ref BR_Proto>();
 		if (!s.buildings)
 			s.buildings = new array<ref BR_Building>();
+		if (!s.bare)
+			s.bare = new array<ref BR_Building>();
 		if (!s.cars)
 			s.cars = new array<ref BR_CarSpot>();
 		if (!s.boats)
 			s.boats = new array<ref BR_CarSpot>();
 		return s;
+	}
+
+	// every building whose roof can have loot: the loot buildings, and the bare ones
+	array<BR_Building> RoofBuildings()
+	{
+		array<BR_Building> all = new array<BR_Building>();
+		foreach (BR_Building b : buildings)
+			all.Insert(b);
+		foreach (BR_Building c : bare)
+			all.Insert(c);
+		return all;
 	}
 }

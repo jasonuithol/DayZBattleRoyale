@@ -41,19 +41,35 @@ class BR_Flight
 			f.from = f.to;
 			f.to = swap;
 		}
-		vector line = f.to - f.from;
-		f.length = Math.Max(line.Length(), 1);
-		f.dir = line * (1 / f.length);
+		f.Finish(height);
+		return f;
+	}
+
+	// testing (testRoofs): west to east, straight across the map at z
+	static BR_Flight PlanAcross(float worldSize, float height, float planeSpeed, float z)
+	{
+		BR_Flight f = new BR_Flight();
+		f.speed = planeSpeed;
+		f.from = Vector(EDGE_MARGIN, 0, z);
+		f.to = Vector(worldSize - EDGE_MARGIN, 0, z);
+		f.Finish(height);
+		return f;
+	}
+
+	protected void Finish(float height)
+	{
+		vector line = to - from;
+		length = Math.Max(line.Length(), 1);
+		dir = line * (1 / length);
 
 		// clear of the highest ground under the route
 		float top = 0;
-		for (float s = 0; s <= f.length; s += 100)
+		for (float s = 0; s <= length; s += 100)
 		{
-			vector q = f.from + f.dir * s;
+			vector q = from + dir * s;
 			top = Math.Max(top, GetGame().SurfaceY(q[0], q[2]));
 		}
-		f.altitude = top + height;
-		return f;
+		altitude = top + height;
 	}
 
 	float Duration()

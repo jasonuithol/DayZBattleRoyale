@@ -78,6 +78,91 @@ modded class MissionGameplay
 		BR_PlaneSound.Update();
 		BR_UpdateHud();
 		BR_Heartbeat();
+		BR_TestRoofs();
+	}
+
+	// testRoofs: the piles on the roofs (the server sends where they are). Logs each one as it
+	// arrives on this game (and as it goes again), with how far the camera was from it, and
+	// every 2 s a line in chat: how many are here, and how far the nearest is
+	protected float m_BR_RoofsAt;
+	protected ref map<int, bool> m_BR_RoofHere = new map<int, bool>();
+	protected int m_BR_RoofCount;
+	protected void BR_TestRoofs()
+	{
+		BR_State state = BR_Client.s_State;
+		if (!state || state.roofPiles.Count() == 0)
+		{
+			m_BR_RoofHere.Clear();
+			m_BR_RoofCount = 0;
+			return;
+		}
+		float now = GetGame().GetTickTime();
+		if (now - m_BR_RoofsAt < 0.5)
+			return;
+		bool say = Math.Floor(now / 2) != Math.Floor(m_BR_RoofsAt / 2);
+		m_BR_RoofsAt = now;
+		if (m_BR_RoofCount != state.roofPiles.Count())
+		{
+			m_BR_RoofHere.Clear();
+			m_BR_RoofCount = state.roofPiles.Count();
+			Print("[BRTest] roofs: " + m_BR_RoofCount + " piles on roofs");
+		}
+		vector cam = GetGame().GetCurrentCameraPosition();
+		int here = 0;
+		float nearest = 1000000;
+		float nearestBelow = 0;
+		float farthestHere = 0;
+		float nearestAway = 1000000;
+		for (int i = 0; i < state.roofPiles.Count(); i++)
+		{
+			vector pile = state.roofPiles[i];
+			bool on = BR_PileHere(pile);
+			float d = vector.Distance(cam, pile);
+			if (on)
+			{
+				here++;
+				farthestHere = Math.Max(farthestHere, d);
+			}
+			else
+				nearestAway = Math.Min(nearestAway, d);
+			if (d < nearest)
+			{
+				nearest = d;
+				nearestBelow = cam[1] - pile[1];
+			}
+			bool was = m_BR_RoofHere.Contains(i) && m_BR_RoofHere.Get(i);
+			if (on != was)
+			{
+				m_BR_RoofHere.Set(i, on);
+				string what = "went";
+				if (on)
+					what = "arrived";
+				float across = vector.Distance(Vector(cam[0], 0, cam[2]), Vector(pile[0], 0, pile[2]));
+				Print("[BRTest] roofs: pile " + i + " " + what + " at " + Math.Round(d) + " m (" + Math.Round(across) + " m across, " + Math.Round(cam[1] - pile[1]) + " m above it), camera " + cam);
+			}
+		}
+		if (!say)
+			return;
+		string line = "roofs: " + here + " of " + state.roofPiles.Count() + " piles here, nearest " + Math.Round(nearest) + " m (" + Math.Round(nearestBelow) + " m down)";
+		if (here > 0)
+			line += ", farthest here " + Math.Round(farthestHere) + " m";
+		if (here < state.roofPiles.Count())
+			line += ", nearest not here " + Math.Round(nearestAway) + " m";
+		GetGame().Chat(line, "colorAction");
+		Print("[BRTest] " + line);
+	}
+
+	// a gun lying within a metre and a half of where the pile was put out
+	protected bool BR_PileHere(vector pile)
+	{
+		array<Object> objects = new array<Object>();
+		GetGame().GetObjectsAtPosition3D(pile, 1.5, objects, null);
+		foreach (Object o : objects)
+		{
+			if (Weapon_Base.Cast(o))
+				return true;
+		}
+		return false;
 	}
 
 	// a line every 2 s while in a round, so a hang shows in the log as the lines stopping
