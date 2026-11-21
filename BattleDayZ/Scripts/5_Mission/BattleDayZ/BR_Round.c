@@ -120,12 +120,14 @@ class BR_Round
 			return;
 		ScriptCallQueue queue = GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY);
 		queue.Remove(s_Instance.Tick);
+		queue.Remove(s_Instance.UpdateTarget);
 		queue.Remove(s_Instance.LootStep);
 		queue.Remove(s_Instance.PrepareRound);
 		queue.Remove(s_Instance.TakeDown);
 		queue.Remove(s_Instance.SelfTestSkyFall);
 		queue.Remove(s_Instance.SelfTestSkyBack);
 		queue.Remove(s_Instance.SelfTestRefillAfter);
+		queue.Remove(s_Instance.SelfTestRefillSettled);
 		BR_Server.s_OnJump.Remove(s_Instance.OnJump);
 		s_Instance = null;
 		BR_Leftovers.s_List.Clear();
@@ -197,6 +199,7 @@ class BR_Round
 		Print("[BattleDayZ] ready: " + m_Spots.buildings.Count() + " loot buildings, " + m_Spots.cars.Count() + " car spots, " + m_Settings.circleSeconds.Count() + " circle timings, " + missing + " unknown loot classes; lobby at " + m_Lobby + ", first round in " + m_Settings.firstLobbySeconds + " s");
 
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(Tick, 1000, true);
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(UpdateTarget, TARGET_CHECK_MS, true);
 	}
 
 	static float Now()
@@ -259,6 +262,7 @@ class BR_Round
 
 		if (m_Phase == BR_Phase.GAME)
 			UpdateGame(now);
+		UpdateApples(now);
 
 		// everyone alive and not in the round belongs in the lobby, and so does everyone still
 		// on the plane: they watch it from a camera (BR_MissionGameplay.c) until they jump
@@ -570,6 +574,200 @@ class BR_Round
 	}
 
 	protected ref array<ref BR_SkyLobby> m_SkyRetired = new array<ref BR_SkyLobby>();
+
+	// The lobby's apples, to throw at each other (nobody can be hurt there): LOBBY_APPLES lying
+	// about at all times, topped up every APPLE_SECONDS, but no more than LOBBY_APPLES_MAX in all,
+	// lying or carried. One that falls off the lobby goes (so do the old lobby's, once it has
+	// changed); one taken into a round goes with the kit.
+	static const int LOBBY_APPLES = 12;
+	static const int LOBBY_APPLES_MAX = 40;
+	static const float APPLE_SECONDS = 3;
+	protected ref array<Object> m_Apples = new array<Object>();
+	protected float m_NextApples;
+	protected BR_SkyLobby m_ApplesIn;     // the lobby the apples were last put out in (for the log)
+
+	// A fountain in the lobby to throw them into (Chernogorsk square's: a square basin with a
+	// column in the middle): an apple someone threw that comes down in its basin, lower than
+	// TARGET_TOP, goes in, and everyone in the lobby is told who threw it. Checked every
+	// TARGET_CHECK_MS. A structure (networked, so every game has it), which nobody can move.
+	// Its shape, measured looking down on it (its collision box comes back empty and its
+	// clipping box is rough): the basin about 3 x 3 m inside a rim 0.3 m above its origin, the
+	// column 0.7 m, nothing to stop an apple inside but the floor; the origin goes on the floor
+	// (what's below it is the part a map sinks into the ground).
+	static const int TARGET_CHECK_MS = 200;
+	static const string TARGET = "StaticObj_Misc_Fountain";
+	static const float TARGET_HALF = 1.25;    // m from its middle across, inside the rim
+	static const float TARGET_BOTTOM = -0.3;  // m from its origin: the floor in the basin, and a little under
+	static const float TARGET_TOP = 0.6;      // the rim and 30 cm above it
+	protected Object m_Target;
+	protected Object m_StoneApple;            // a big stone apple on top of its column (BR_StoneApple)
+	static const float STONE_APPLE_SINK = 0.02; // m: its model's bottom is this far above its origin
+	protected BR_SkyLobby m_TargetIn;
+	protected int m_TargetScore;              // apples in, in this lobby
+	protected ref map<Object, string> m_AppleBy = new map<Object, string>(); // who last had it
+
+	void UpdateTarget()
+	{
+		if (!m_Sky)
+			return;
+		if (m_TargetIn != m_Sky || !m_Target)
+			PutTarget();
+		if (!m_Target)
+			return;
+		for (int i = m_Apples.Count() - 1; i >= 0; i--)
+		{
+			EntityAI apple = EntityAI.Cast(m_Apples[i]);
+			if (!apple)
+				continue;
+			if (apple.GetHierarchyParent())
+			{
+				Man holder = apple.GetHierarchyRootPlayer();
+				if (holder && holder.GetIdentity())
+					m_AppleBy.Set(apple, holder.GetIdentity().GetName());
+				continue;
+			}
+			if (!m_AppleBy.Contains(apple) || !InTarget(apple.GetPosition()))
+				continue; // only thrown ones count
+			string by = m_AppleBy.Get(apple);
+			m_AppleBy.Remove(apple);
+			m_Apples.Remove(i);
+			GetGame().ObjectDelete(apple);
+			m_TargetScore++;
+			Print("[BattleDayZ] " + by + " got an apple in the fountain (" + m_TargetScore + " in " + m_Sky.m_Title + ")");
+			array<Man> men = new array<Man>();
+			GetGame().GetPlayers(men);
+			foreach (PlayerBase waiting : LobbyPlayers(men))
+			{
+				if (waiting.GetIdentity())
+					NotificationSystem.SendNotificationToPlayerIdentityExtended(waiting.GetIdentity(), 4, "In the fountain!", by + " got an apple in. " + m_TargetScore + " in so far.");
+			}
+		}
+	}
+
+	bool InTarget(vector pos)
+	{
+		if (!m_Target)
+			return false;
+		vector p = m_Target.WorldToModel(pos);
+		return Math.AbsFloat(p[0]) <= TARGET_HALF && Math.AbsFloat(p[2]) <= TARGET_HALF && p[1] >= TARGET_BOTTOM && p[1] <= TARGET_TOP;
+	}
+
+	// the middle of the top of the fountain's column: looking straight down within 0.4 m of the
+	// fountain's middle every COLUMN_STEP m (by its view geometry: it has no other on top), the
+	// highest place on it, then the middle of every place within COLUMN_TOP of that height
+	static const float COLUMN_STEP = 0.02;
+	static const float COLUMN_TOP = 0.05;
+	vector ColumnTop(Object fountain)
+	{
+		array<vector> hits = new array<vector>();
+		float highest = -1000;
+		for (float x = -0.4; x <= 0.4; x += COLUMN_STEP)
+		{
+			for (float z = -0.4; z <= 0.4; z += COLUMN_STEP)
+			{
+				vector p = fountain.ModelToWorld(Vector(x, 0, z));
+				vector hit, normal;
+				int comp;
+				set<Object> objects = new set<Object>;
+				if (!DayZPhysics.RaycastRV(p + "0 4 0", p - "0 2 0", hit, normal, comp, objects, null, null, true, false, ObjIntersectView))
+					continue;
+				if (objects.Count() == 0 || objects[0] != fountain)
+					continue;
+				hits.Insert(hit);
+				highest = Math.Max(highest, hit[1]);
+			}
+		}
+		if (hits.Count() == 0)
+			return fountain.ModelToWorld(Vector(0, 0.7, 0));
+		vector sum = vector.Zero;
+		int count = 0;
+		foreach (vector h : hits)
+		{
+			if (h[1] < highest - COLUMN_TOP)
+				continue;
+			sum += h;
+			count++;
+		}
+		vector middle = sum * (1.0 / count);
+		middle[1] = highest;
+		return middle;
+	}
+
+	// the fountain, on the floor near the middle of the lobby (the old lobby's goes)
+	void PutTarget()
+	{
+		if (m_Target)
+			GetGame().ObjectDelete(m_Target);
+		if (m_StoneApple)
+			GetGame().ObjectDelete(m_StoneApple);
+		m_Target = null;
+		m_StoneApple = null;
+		m_TargetIn = m_Sky;
+		m_TargetScore = 0;
+		vector spot = m_Sky.Spot();
+		m_Target = GetGame().CreateObjectEx(TARGET, spot, ECE_SETUP | ECE_CREATEPHYSICS);
+		if (!m_Target)
+		{
+			Print("[BattleDayZ] couldn't put the fountain in the lobby");
+			return;
+		}
+		m_Target.SetPosition(spot);
+		m_Target.SetOrientation(Vector(Math.RandomFloat(0, 360), 0, 0));
+		vector column = ColumnTop(m_Target);
+		m_StoneApple = GetGame().CreateObjectEx("BR_StoneApple", column, ECE_SETUP);
+		if (m_StoneApple)
+		{
+			m_StoneApple.SetPosition(column - Vector(0, STONE_APPLE_SINK, 0));
+			m_StoneApple.SetOrientation(Vector(Math.RandomFloat(0, 360), 0, 0));
+		}
+		Print("[BattleDayZ] a fountain in the lobby (" + m_Sky.m_Title + ") at " + (spot - m_Sky.m_Origin) + " from its middle, its column's top " + m_Target.WorldToModel(column) + " (the stone apple on it: " + (m_StoneApple != null) + ")");
+	}
+
+	void UpdateApples(float now)
+	{
+		if (!m_Sky || now < m_NextApples)
+			return;
+		m_NextApples = now + APPLE_SECONDS;
+		int lying = 0;
+		for (int i = m_Apples.Count() - 1; i >= 0; i--)
+		{
+			EntityAI apple = EntityAI.Cast(m_Apples[i]);
+			if (!apple)
+			{
+				m_Apples.Remove(i);
+				continue;
+			}
+			if (apple.GetHierarchyParent())
+				continue; // someone has it
+			if (m_Sky.Strayed(apple.GetPosition()))
+			{
+				GetGame().ObjectDelete(apple);
+				m_Apples.Remove(i);
+				continue;
+			}
+			lying++;
+		}
+		int made = 0;
+		while (lying < LOBBY_APPLES && m_Apples.Count() < LOBBY_APPLES_MAX)
+		{
+			vector where = m_Sky.Spot();
+			for (int tries = 0; tries < 10 && InTarget(where + "0 0.3 0"); tries++)
+				where = m_Sky.Spot(); // not in the fountain
+			EntityAI one = EntityAI.Cast(GetGame().CreateObjectEx("Apple", where + "0 0.05 0", ECE_SETUP | ECE_CREATEPHYSICS));
+			if (!one)
+				break;
+			one.SetOrientation(Vector(Math.RandomFloat(0, 360), 0, 0));
+			one.SetLifetime(BR_Loot.LOOT_LIFETIME);
+			m_Apples.Insert(one);
+			lying++;
+			made++;
+		}
+		if (made > 0 && m_ApplesIn != m_Sky)
+		{
+			m_ApplesIn = m_Sky;
+			Print("[BattleDayZ] " + made + " apples put out in the lobby (" + m_Sky.m_Title + "), " + m_Apples.Count() + " in all");
+		}
+	}
 
 	void TakeDown(BR_SkyLobby old)
 	{
@@ -1957,13 +2155,40 @@ class BR_Round
 			m_Spawned.Insert(m_SkyFaller);
 			m_SkyFaller.SetAllowDamage(false);
 		}
+		// the apples: put out now, still on the floor 5 s later
+		m_NextApples = 0;
+		UpdateApples(Now());
+		m_ApplesPut.Clear();
+		foreach (Object a : m_Apples)
+		{
+			if (a)
+				m_ApplesPut.Insert(a.GetPosition());
+		}
 		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestSkyFall, 5000, false);
 	}
+
+	protected ref array<vector> m_ApplesPut = new array<vector>();
 
 	void SelfTestSkyFall()
 	{
 		if (m_SkyStander)
 			Print("[BRTest] sky lobby: standing " + (m_SkyStander.GetPosition()[1] - m_SkyStood[1]) + " m from where it was put, after 5 s");
+		int still = 0;
+		float worstDrop = 0;
+		for (int ai = 0; ai < m_Apples.Count() && ai < m_ApplesPut.Count(); ai++)
+		{
+			if (!m_Apples[ai])
+				continue;
+			float drop = m_ApplesPut[ai][1] - m_Apples[ai].GetPosition()[1];
+			worstDrop = Math.Max(worstDrop, drop);
+			if (!m_Sky.Strayed(m_Apples[ai].GetPosition()))
+				still++;
+		}
+		if (m_Target)
+			Print("[BRTest] sky lobby fountain: " + m_Target.GetType() + " at " + (m_Target.GetPosition() - m_Sky.m_Origin) + " from the middle, " + (m_Target.GetPosition()[1] - GetGame().SurfaceY(m_Target.GetPosition()[0], m_Target.GetPosition()[2])) + " m above the ground (up in the sky)");
+		else
+			Print("[BRTest] sky lobby fountain: none");
+		Print("[BRTest] sky lobby apples: " + m_ApplesPut.Count() + " put out (" + LOBBY_APPLES + " expected), " + still + " still in the lobby after 5 s, the most one fell " + worstDrop + " m");
 		if (!m_SkyFaller)
 			return;
 		vector p = m_SkyFaller.GetPosition();
@@ -2017,6 +2242,26 @@ class BR_Round
 		Print("[BRTest] refill: found the magazine on the gun " + found + ", " + had + " rounds to hand (10 loose, 2 boxes of 20), " + added + " into a new spare: " + spare + " (30/30 expected), " + boxes + " boxes left (1 expected), " + loose + " loose rounds left (0 expected)");
 	}
 
+	// a reload's made magazine, never swapped in, gone again: no magazine made from nothing
+	void SelfTestRefillSettled(PlayerBase gunner)
+	{
+		if (!gunner)
+			return;
+		array<EntityAI> items = new array<EntityAI>();
+		gunner.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+		int mags = 0;
+		int loose = 0;
+		foreach (EntityAI item : items)
+		{
+			if (item.GetType() == "Mag_AKM_30Rnd")
+				mags++;
+			Magazine pile = Magazine.Cast(item);
+			if (pile && pile.IsAmmoPile())
+				loose += pile.GetAmmoCount();
+		}
+		Print("[BRTest] refill settled: " + mags + " AKM magazines (1 expected: no duplicate), " + loose + " loose rounds (30 expected: the made one's back)");
+	}
+
 	// what a hit of each candidate kind does to a fresh character (for the storm's cuts)
 	void SelfTestHits()
 	{
@@ -2058,8 +2303,13 @@ class BR_Round
 					}
 					Print("[BRTest] refill action: on the reload key:" + order + "; registered " + (refill != null) + " (a vanilla one: " + (vanilla != null) + "), possible " + can + ", action manager " + gunner.GetActionManager());
 					int added;
-					Magazine spare = BR_Refill.FillSpare(gunner, mag, added);
+					bool made;
+					Magazine spare = BR_Refill.FillSpare(gunner, mag, added, made);
 					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestRefillAfter, 500, false, gunner, spare, had, added, topped != null);
+					// nobody swaps it in here: the made one goes again, its rounds back
+					if (spare && made)
+						GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(BR_Refill.Settle, BR_Refill.SETTLE_CHECK_MS, false, gunner, mag, spare, 0);
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(SelfTestRefillSettled, BR_Refill.SETTLE_WAIT_MS + 1500, false, gunner);
 				}
 				else
 					Print("[BRTest] refill: no magazine on the AKM");

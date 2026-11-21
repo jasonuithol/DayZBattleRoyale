@@ -68,4 +68,10 @@ class CfgVehicles
 		scope = 1;
 		model = "\BattleDayZ\data\stormwall.p3d";
 	};
+	// a big stone apple on top of the lobby fountain's column (no collision)
+	class BR_StoneApple: HouseNoDestruct
+	{
+		scope = 1;
+		model = "\BattleDayZ\data\stoneapple.p3d";
+	};
 };

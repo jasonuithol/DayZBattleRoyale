@@ -2,7 +2,9 @@
 // inventory (loose rounds, or the boxes they come in, unopened) and no fuller magazine of that
 // kind to swap in, the reload key fills a spare magazine of the same kind from that ammo (the
 // one the last reload took off, or a new one) and swaps it in with vanilla's own reload. With
-// no ammo for it, or a spare already full enough, reload is vanilla's.
+// no ammo for it, or a spare already full enough, reload is vanilla's. A new one replaces the
+// one it swaps out, rather than adding to them (Settle): the old one's rounds go back to the
+// ammo carried and it goes, so reloading never makes magazines.
 //
 // Not the magazine on the gun itself: a gun keeps its own count of what its magazine holds,
 // changed only by its own reload actions, so a server-side top-up there never reached the
@@ -42,10 +44,12 @@ class BR_Refill
 		return best;
 	}
 
-	// server: the spare, filled from the ammo carried (a new, empty one first if there's none)
-	static Magazine FillSpare(PlayerBase player, Magazine onGun, out int added)
+	// server: the spare, filled from the ammo carried (a new, empty one first if there's none:
+	// made, which Settle then trades for the one it swaps out)
+	static Magazine FillSpare(PlayerBase player, Magazine onGun, out int added, out bool made)
 	{
 		added = 0;
+		made = false;
 		Magazine spare = Spare(player, onGun);
 		if (!spare)
 		{
@@ -53,9 +57,64 @@ class BR_Refill
 			if (!spare)
 				return null; // no room for one
 			spare.ServerSetAmmoCount(0);
+			made = true;
 		}
 		added = Refill(player, spare);
 		return spare;
+	}
+
+	// server, after a magazine was made for the swap: once the old one is off the gun and the
+	// made one on it, the old one's rounds go back to the ammo carried and the old one goes. If
+	// the swap hasn't happened after SETTLE_WAIT_MS, the made one goes instead (its rounds back:
+	// they came from that ammo). Either way the player has as many magazines as before.
+	static const int SETTLE_CHECK_MS = 250;
+	static const int SETTLE_WAIT_MS = 5000;
+	static void Settle(PlayerBase player, Magazine old, Magazine made, int waited)
+	{
+		if (!made || !old)
+			return;
+		bool swapped = !Weapon_Base.Cast(old.GetHierarchyParent()) && Weapon_Base.Cast(made.GetHierarchyParent());
+		if (swapped)
+		{
+			Print("[BattleDayZ] the " + old.GetType() + " swapped out goes (" + old.GetAmmoCount() + " rounds back to the ammo): the one made for the reload replaces it");
+			GiveBack(player, old);
+			GetGame().ObjectDelete(old);
+			return;
+		}
+		if (waited >= SETTLE_WAIT_MS)
+		{
+			Print("[BattleDayZ] the " + made.GetType() + " made for a reload wasn't swapped in: it goes (" + made.GetAmmoCount() + " rounds back to the ammo)");
+			GiveBack(player, made);
+			GetGame().ObjectDelete(made);
+			return;
+		}
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(Settle, SETTLE_CHECK_MS, false, player, old, made, waited + SETTLE_CHECK_MS);
+	}
+
+	// server: a magazine's rounds, to the player as loose rounds (in piles as big as they go;
+	// on the ground at their feet if there's no room)
+	static void GiveBack(PlayerBase player, Magazine mag)
+	{
+		int left = mag.GetAmmoCount();
+		if (left <= 0 || !player)
+			return;
+		TStringArray rounds;
+		AmmoFor(mag, rounds);
+		if (rounds.Count() == 0)
+			return;
+		while (left > 0)
+		{
+			Magazine pile = Magazine.Cast(player.GetInventory().CreateInInventory(rounds[0]));
+			if (!pile)
+				pile = Magazine.Cast(GetGame().CreateObjectEx(rounds[0], player.GetPosition(), ECE_PLACE_ON_SURFACE));
+			if (!pile)
+				return;
+			int put = Math.Min(left, pile.GetAmmoMax());
+			if (put <= 0)
+				return;
+			pile.ServerSetAmmoCount(put);
+			left -= put;
+		}
 	}
 
 	// the player's game, a moment after the server filled the spare: swap it in (vanilla's swap)
@@ -230,7 +289,10 @@ class BR_ActionRefillMagazine : FirearmActionBase
 		if (!mag)
 			return;
 		int added;
-		Magazine spare = BR_Refill.FillSpare(player, mag, added);
+		bool made;
+		Magazine spare = BR_Refill.FillSpare(player, mag, added, made);
+		if (spare && made)
+			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(BR_Refill.Settle, BR_Refill.SETTLE_CHECK_MS, false, player, mag, spare, 0);
 		string who = "someone";
 		if (player.GetIdentity())
 			who = player.GetIdentity().GetName();

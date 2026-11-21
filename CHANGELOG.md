@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.1 - 2026-11-21
+
+- **Apples in the lobby:** a dozen lying about at all times, to throw at each other (nobody
+  can be hurt there).
+- **A fountain to throw them into:** Chernogorsk square's fountain is in every lobby, with a
+  big stone apple on its column. An apple thrown into its basin goes in, and everyone
+  waiting is told who got it in and how many are in so far.
+- **Fixed: reloading made magazines.** Reloading with no spare magazine made a new one and
+  kept the old one too (a free 60-round STANAG, say). The new one now replaces the old one,
+  whose rounds go back to your ammo.
+- **Fixed: picking something up in the lobby said you were ready.** F is the game's interact
+  key too; picking up an apple (or opening a door) no longer counts as ready.
+
 ## 0.7.0 - 2026-11-21
 
 - **Much more loot, put out as you come near.** A building's loot goes out once a player is

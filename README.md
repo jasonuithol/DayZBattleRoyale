@@ -15,10 +15,14 @@ what comes later.
    copies whatever stands at the place: buildings (as their Land_ class, so doors and ladders
    work), rocks and anything within a building keep their heights, and trees, bushes and
    small things out in the open stand on the floor. Players appear on open, flat ground. There
-   nobody can be hurt, and anyone who walks or falls off the edge is brought back. A clock at the top of the screen counts down to the
+   nobody can be hurt, and anyone who walks or falls off the edge is brought back. There are
+   always 12 apples lying about to throw at each other (40 at most, counting the ones people
+   carry), and a fountain (Chernogorsk square's) with a stone apple on its column: an apple
+   thrown into its basin goes in, and everyone waiting is told who got it in. A clock at the top of the screen counts down to the
    next round: longer after a server start (`firstLobbySeconds`, 5 minutes by default) so
    people can log in, then 3 minutes between rounds (`lobbySeconds`), or less: once everyone
-   waiting has pressed F to say they're ready, the round starts straight away. New characters are created here,
+   waiting has pressed F to say they're ready (F picking something up, or opening a door,
+   doesn't count), the round starts straight away. New characters are created here,
    and so is anyone who dies. Everyone arriving in the lobby (new, respawned, or back from a
    round) is reset: the plain kit below, fully healed (every limb, broken legs, bleeding,
    diseases, food and water). Meanwhile the next round is got ready: its circles are picked (the first is as wide as the
@@ -206,8 +210,9 @@ The light loot, one of these per loot spot:
 
 Reloading a gun that takes magazines reloads from the ammo you carry: a spare magazine of the
 same kind (the one the last reload took off, or a new one) is filled from your loose rounds and
-then unopened boxes, and swapped in with the usual reload. With a fuller spare already, or no
-ammo for it, reload works as usual.
+then unopened boxes, and swapped in with the usual reload. A new one replaces the magazine it
+swaps out: that one's rounds go back to your ammo and it goes, so reloading never makes
+magazines. With a fuller spare already, or no ammo for it, reload works as usual.
 
 ## Layout
 
@@ -257,6 +262,8 @@ ammo for it, reload works as usual.
 - The storm wall, the same way: `blender/build_stormwall.py` builds one 10 m × 40 m panel,
   seen from both sides, with no collision or shadow. `tools/make_stormwall_texture.py` makes
   its see-through texture (source in `textures/`). Its glow is in `data/stormwall.rvmat`.
+- The stone apple on the lobby fountain, the same way: `blender/build_stoneapple.py`, 0.45 m
+  across, no collision, in the game's limestone (`data/stoneapple.rvmat`).
   `model.cfg` is shared, and `build_parachute.py` writes it.
 - `tools/build.sh`: stages the mod in `build/BattleDayZ`, with the model binarized.
 
@@ -303,6 +310,7 @@ What the headless test checks:
 - where the next circle goes
 - the plane's route, height and flight time, and that Expansion's plane is created
 - the parachute: a test character jumps from 50 m and lands unhurt
+- the lobby's apples and fountain, and that a reload's new magazine doesn't stay as an extra
 - the circle cycle, on simulated time, down to the storm being everywhere
 - a storm hit takes exactly the health it should
 - the storm wall's model loads

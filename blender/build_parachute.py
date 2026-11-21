@@ -84,6 +84,7 @@ class CfgModels
 	};
 	class parachute: Default {};
 	class stormwall: Default {};   // blender/build_stormwall.py (this file is shared)
+	class stoneapple: Default {};  // blender/build_stoneapple.py
 };
 '''
 

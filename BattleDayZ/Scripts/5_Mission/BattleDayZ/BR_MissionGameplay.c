@@ -295,12 +295,30 @@ modded class MissionGameplay
 		bool watch = state.phase == BR_Phase.GAME && !state.inRound && !state.inPlane;
 		if (!pressed || !(state.inPlane || falling || lobby || watch) || GetGame().GetUIManager().GetMenu())
 			return;
+		// F is the game's own interact key too: in the lobby, picking up an apple or opening a
+		// door isn't saying you're ready
+		if (lobby && BR_Interacting())
+			return;
 		float now = GetGame().GetTickTime();
 		if (now - m_BR_JumpAsked < 1)
 			return;
 		m_BR_JumpAsked = now;
 		Print("[BattleDayZ] F: in the lobby " + lobby + ", in the plane " + state.inPlane + ", falling " + falling);
 		BR_Client.RequestJump(BR_SeenPlane());
+	}
+
+	// the game has an interact action on offer to F (pick up, open, ...), or one going on
+	protected bool BR_Interacting()
+	{
+		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+		if (!player)
+			return false;
+		ActionManagerClient actions = ActionManagerClient.Cast(player.GetActionManager());
+		if (!actions)
+			return false;
+		if (actions.GetRunningAction())
+			return true;
+		return actions.GetPossibleAction(InteractActionInput) || actions.GetPossibleAction(ContinuousInteractActionInput);
 	}
 
 	// FlyingWithoutCTD: capped for the whole time on a battle royale server (it comes back on
