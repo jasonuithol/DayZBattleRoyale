@@ -17,9 +17,11 @@
 # (3832475660, which needs it) is in the loot; BetterExplosions_Expansion (3838825900) gives
 # the Land Rover its wreck too. BattleDayZ (3840761372) is built from
 # ../DayZBattleRoyale/BattleDayZ (DayZMissions mods/BattleDayZ links to it); players need it
-# too (HUD, F, the map lines, the storm).
+# too (HUD, F, the map lines, the storm). BigMachines (3845168821) puts working bulldozers,
+# excavators, tower cranes and combine harvesters in place of some of the map's wrecks.
 local @FlyingWithoutCTD
 local @BetterExplosions
 local @Molotov
 local @BetterExplosions_Expansion
+local @BigMachines
 local @BattleDayZ
