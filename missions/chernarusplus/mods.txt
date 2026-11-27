@@ -18,10 +18,13 @@
 # the Land Rover its wreck too. BattleDayZ (3840761372) is built from
 # ../DayZBattleRoyale/BattleDayZ (DayZMissions mods/BattleDayZ links to it); players need it
 # too (HUD, F, the map lines, the storm). BigMachines (3845168821) puts working bulldozers,
-# excavators, tower cranes and combine harvesters in place of some of the map's wrecks.
+# excavators, tower cranes and combine harvesters in place of some of the map's wrecks;
+# BetterExplosions_BigMachines (3846545006) blows its bulldozers, excavators and combines up
+# into the wrecks they were restored from.
 local @FlyingWithoutCTD
 local @BetterExplosions
 local @Molotov
 local @BetterExplosions_Expansion
 local @BigMachines
+local @BetterExplosions_BigMachines
 local @BattleDayZ
